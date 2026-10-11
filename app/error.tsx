@@ -2,10 +2,14 @@
 
 import { useEffect } from "react";
 import { TriangleAlert } from "lucide-react";
+import { MAX_PERSISTED_TEXT_CHARS } from "./tools/judgewright/_lib/constants";
 
 /**
  * Route-level error boundary for the app router. A thrown render error must
- * still leave a usable, on-brand surface — never a white screen.
+ * still leave a usable, on-brand surface — never a white screen. The copy is
+ * honest about persistence (A1): only sessions under MAX_PERSISTED_TEXT_CHARS
+ * survive a reload, because an over-quota localStorage write is exactly the
+ * class of failure that lands here.
  */
 export default function Error({
   error,
@@ -25,8 +29,11 @@ export default function Error({
         <h1 className="text-lg font-semibold tracking-tight">Something broke</h1>
       </div>
       <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-        The workstation hit an unexpected error. Your verdicts stay in this
-        browser — reloading restores the session from local storage.
+        The workstation hit an unexpected error. Sessions are saved for reload
+        only while the verdicts stay under{" "}
+        {MAX_PERSISTED_TEXT_CHARS.toLocaleString("en-US")} characters — a larger
+        paste is not stored, so keep a copy outside the browser until you have
+        exported what you need.
       </p>
       <button
         type="button"

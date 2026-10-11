@@ -38,6 +38,13 @@ import type {
 export interface AnalyzeOptions {
   /** Cooperative budget: worker 1,000 ms · sync fallback 800 ms. */
   deadlineMs?: number;
+  /**
+   * A2 — the cooperative budget as an ABSOLUTE timestamp (`Date.now()`). When
+   * supplied it REPLACES the internally derived boundary, so the budget can be
+   * forced (tests) or folded to cover the parse; without it the budget starts
+   * just before the parse.
+   */
+  deadlineAt?: number;
   /** Bootstrap seed — echoed in the receipt; deterministic once M2 lands. */
   seed?: number;
   /** Confidence level the CI panel will report (echoed in the receipt). */
@@ -146,10 +153,17 @@ export function analyzeVerdicts(
   }
 
   try {
+    // A2: the cooperative budget is an ABSOLUTE timestamp taken BEFORE the
+    // parse, so the parse is folded into the budget instead of eating into
+    // the compute phases unchecked. A trip therefore reports honestly
+    // (`ciDropped`) while the point statistics still settle — an in-cap
+    // input never produces an error-with-no-report.
+    const deadlineAt = options.deadlineAt ?? startedAt + deadlineMs;
     const report: CalibrationReport = computeReport(parsed.verdicts, {
       seed,
       confidenceLevel,
       deadlineMs,
+      deadlineAt,
       engine,
       truncated: parsed.capped,
       rowCount: parsed.rowCount,

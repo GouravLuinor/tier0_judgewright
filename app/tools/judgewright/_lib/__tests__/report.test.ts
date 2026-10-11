@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeReport } from "../report";
+import { computeReport, reportDisagreementWindow } from "../report";
 import { analyzeVerdicts } from "../analyze";
 import { parseVerdicts } from "../parse";
 import type { RawVerdict } from "../types";
@@ -269,6 +269,95 @@ describe("computeReport — the degenerate guard (AC-29 / FM-4)", () => {
     // The rest of the report still computes — accuracy is the honest fallback.
     expect(report.accuracy).toBeCloseTo(0.6, 12);
     expect(report.baseline.baselineAgreement).toBeCloseTo(0.6, 12);
+  });
+});
+
+/**
+ * A3 — the TRUE full-set totals. The display window (what the store settles
+ * and the export ships) is capped at MAX_TABLE_ROWS; these two fields carry
+ * the whole-set figures so no window count can print as a total.
+ */
+describe("computeReport — the TRUE full-set totals (A3)", () => {
+  it("agreementTotal/disagreementTotal count the FULL analyzed set, not the window", () => {
+    const full = computeReport(headlineFixture(), DEFAULT_OPTIONS);
+    // 950 agreements and 50 disagreements across all 1,000 rows.
+    expect(full.agreementTotal).toBe(950);
+    expect(full.disagreementTotal).toBe(50);
+    expect(full.agreementTotal + full.disagreementTotal).toBe(full.n);
+
+    // The windowed form (what the worker payload / store settles) keeps the
+    // same totals while `disagreements` shrinks to the display cap.
+    const windowed = reportDisagreementWindow(computeReport(headlineFixture(), DEFAULT_OPTIONS), 0, 2);
+    expect(windowed.disagreements).toHaveLength(2);
+    expect(windowed.agreementTotal).toBe(950);
+    expect(windowed.disagreementTotal).toBe(50);
+  });
+
+  it("a k-class fixture's totals sum to n as well", () => {
+    const rows: RawVerdict[] = [
+      ["good", "good"],
+      ["good", "ok"],
+      ["ok", "ok"],
+      ["ok", "bad"],
+      ["bad", "bad"],
+      ["bad", "good"],
+    ].map(([judge, human], i) => ({
+      exampleId: `ex-${i}`,
+      judgeLabel: judge,
+      humanLabels: [human],
+      judgeScore: null,
+      humanScore: null,
+      judgeCritique: null,
+      humanCritique: null,
+      judgeInput: null,
+      judgeOutput: null,
+      position: null,
+      preferredLonger: null,
+      lineNumber: i + 1,
+    }));
+    const report = computeReport(rows, DEFAULT_OPTIONS);
+    expect(report.n).toBe(6);
+    expect(report.agreementTotal).toBe(3);
+    expect(report.disagreementTotal).toBe(3);
+  });
+});
+
+/**
+ * A2 — the cooperative budget is an ABSOLUTE timestamp taken before the parse,
+ * so a budget the parse already spent drops the CIs HONESTLY: the point
+ * statistics settle, `ciDropped` is true, and no report is ever discarded.
+ */
+describe("computeReport — an already-spent budget drops CIs, never the report (A2)", () => {
+  it("a deadlineAt in the past settles the point statistics with ciDropped", () => {
+    const rows = headlineFixture();
+    const spent = computeReport(rows, {
+      ...DEFAULT_OPTIONS,
+      deadlineAt: Date.now() - 1,
+    });
+    expect(spent.ci.accuracy).toBeNull();
+    expect(spent.ci.kappa).toBeNull();
+    expect(spent.ci.alpha).toBeNull();
+    expect(spent.ciDropped).toBe(true);
+    // The point statistics are byte-identical to the unconstrained run
+    // (AGENTS §31: a deadline trip never changes a number).
+    const full = computeReport(rows, DEFAULT_OPTIONS);
+    expect(spent.n).toBe(full.n);
+    expect(spent.accuracy).toBe(full.accuracy);
+    expect(spent.kappa).toBe(full.kappa);
+    expect(spent.agreementRows).toBe(full.agreementRows);
+    expect(spent.baseline.baselineAgreement).toBe(full.baseline.baselineAgreement);
+    expect(spent.bootstrapReplicates).toBe(full.bootstrapReplicates);
+    // The receipt names the trip instead of claiming the replicates ran.
+    expect(spent.receipt).toContain("ciDropped: true");
+  });
+
+  it("an unconstrained budget still computes every replicate", () => {
+    const report = computeReport(headlineFixture(), {
+      ...DEFAULT_OPTIONS,
+      deadlineAt: Date.now() + 60_000,
+    });
+    expect(report.ci.accuracy).not.toBeNull();
+    expect(report.ciDropped).toBe(false);
   });
 });
 

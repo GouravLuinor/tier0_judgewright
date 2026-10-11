@@ -1,13 +1,14 @@
 "use client";
 
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import {
   DEFAULT_SETTINGS,
   SAMPLE_RUBRIC,
   SAMPLE_VERDICTS,
 } from "../_lib/presets";
 import {
+  MAX_PERSISTED_TEXT_CHARS,
   STORAGE_KEY,
   STORAGE_VERSION,
 } from "../_lib/constants";
@@ -19,6 +20,48 @@ import type {
   ParseIssue,
   VerdictAnalysis,
 } from "../_lib/types";
+
+/**
+ * A1 — localStorage behind a quota guard, in the style of `authGate.ts`: a
+ * QuotaExceededError (or any storage failure) must never propagate out of the
+ * store's `set()`, because that throw unmounts the React tree to the error
+ * screen and loses the paste. Every call therefore fails soft; a failed write
+ * self-disables persistence for the rest of the session instead of retrying a
+ * guaranteed-to-throw write on every keystroke.
+ */
+let persistenceDisabled = false;
+
+function guardedLocalStorage(): StateStorage {
+  return {
+    getItem: (name) => {
+      try {
+        return window.localStorage.getItem(name);
+      } catch {
+        // Storage unavailable (private mode, disabled cookies) — rehydrate
+        // from nothing rather than crash the mount.
+        return null;
+      }
+    },
+    setItem: (name, value) => {
+      if (persistenceDisabled) return;
+      try {
+        window.localStorage.setItem(name, value);
+      } catch {
+        // Quota exceeded: swallow it (the error screen loses the paste), stop
+        // persisting, and keep the session running.
+        persistenceDisabled = true;
+      }
+    },
+    removeItem: (name) => {
+      if (persistenceDisabled) return;
+      try {
+        window.localStorage.removeItem(name);
+      } catch {
+        persistenceDisabled = true;
+      }
+    },
+  };
+}
 
 /** Screen-reader announcement payload; `seq` keys re-renders of identical text. */
 export interface StatusAnnouncement {
@@ -174,17 +217,27 @@ export const useToolStore = create<ToolState>()(
               ),
             };
           }
+          // The window the worker posted, or the one implied by the settled
+          // rows — both engines settle the SAME capped slice.
+          const window: DisagreementWindow =
+            options?.window ?? {
+              offset: 0,
+              rows: result.stats.report.disagreements.slice(0, MAX_TABLE_ROWS),
+              totalCount: result.stats.report.n,
+            };
           return {
-            stats: result.stats,
-            // The window the worker posted, or the one implied by the settled
-            // rows — the main-thread fallback builds the same capped slice so
-            // the pane's "showing X of Y" strip is honest on both paths.
-            disagreementWindow:
-              options?.window ?? {
-                offset: 0,
-                rows: result.stats.report.disagreements.slice(0, MAX_TABLE_ROWS),
-                totalCount: result.stats.report.n,
+            // A3: the settled report carries this same display window whichever
+            // engine produced it, so the exports and the diagnosis selection
+            // are byte-identical on the worker and the main-thread fallback —
+            // and never a full-set array on one path and a window on the other.
+            stats: {
+              ...result.stats,
+              report: {
+                ...result.stats.report,
+                disagreements: window.rows,
               },
+            },
+            disagreementWindow: window,
             parseIssues: result.stats.parse.issues,
             parseIssueCount: result.stats.parse.issueCount,
             degraded: result.degraded,
@@ -220,11 +273,19 @@ export const useToolStore = create<ToolState>()(
       // HTML and the first client paint never disagree.
       skipHydration: true,
       // Content only — the theme key is NEVER merged into this store.
-      partialize: (state) => ({
-        verdictsText: state.verdictsText,
-        rubric: state.rubric,
-        settings: state.settings,
-      }),
+      // A1: an over-budget paste is NOT persisted (no quota-throwing write),
+      // so a reload restores the settings and rubric but not a multi-MB paste.
+      partialize: (state) =>
+        state.verdictsText.length <= MAX_PERSISTED_TEXT_CHARS
+          ? {
+              verdictsText: state.verdictsText,
+              rubric: state.rubric,
+              settings: state.settings,
+            }
+          : {
+              rubric: state.rubric,
+              settings: state.settings,
+            },
       // Future-proofing: v0/v1 payloads pass through; merge() below repairs
       // shape drift so version bumps stay additive.
       migrate: (persisted) => persisted as ToolState,
@@ -233,11 +294,16 @@ export const useToolStore = create<ToolState>()(
         return {
           ...current,
           ...incoming,
+          // A1: a payload written while the paste was over the persist budget
+          // carries no `verdictsText` — keep the current content (the seed)
+          // instead of wiping the pane with a spread of nothing.
+          verdictsText: incoming.verdictsText ?? current.verdictsText,
           // Defensive: hand-edited or older payloads may miss setting keys.
           settings: { ...DEFAULT_SETTINGS, ...(incoming.settings ?? {}) },
         };
       },
-      storage: createJSONStorage(() => localStorage),
+      // A1: the guarded wrapper above — quota failures fail soft.
+      storage: createJSONStorage(() => guardedLocalStorage()),
     }
   )
 );

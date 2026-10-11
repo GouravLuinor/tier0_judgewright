@@ -333,7 +333,13 @@ export function krippendorffAlpha(
     return { value: null, reason: ALPHA_UNDEFINED_COPY, warning: ordering.warning };
   }
 
-  return { value: 1 - observed / expected, reason: null, warning: ordering.warning };
+  // A4: extreme-but-finite labels (e.g. ±1e155 on the interval path) can
+  // overflow `observed`/`expected` to Infinity, and Inf/Inf is NaN. α is
+  // never NaN (AC-08): a non-finite ratio is undefined, with the reason.
+  const value = 1 - observed / expected;
+  return Number.isFinite(value)
+    ? { value, reason: null, warning: ordering.warning }
+    : { value: null, reason: ALPHA_UNDEFINED_COPY, warning: ordering.warning };
 }
 
 // ── The bootstrap replicate path ────────────────────────────────────────────
@@ -437,5 +443,8 @@ export function alphaFromPairCounts(
   }
 
   if (expected === 0) return null;
-  return 1 - observed / expected;
+  const value = 1 - observed / expected;
+  // The A4 guard again: a replicate whose arithmetic overflowed to a non-finite
+  // ratio is dropped by the caller rather than poisoning a percentile.
+  return Number.isFinite(value) ? value : null;
 }

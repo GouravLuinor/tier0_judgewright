@@ -4,6 +4,7 @@ import {
   ALPHA_INTERVAL_REASON,
   ALPHA_KAPPA_BANDS_NOTE,
   ALPHA_ORDINAL_FALLBACK_WARNING,
+  ALPHA_UNDEFINED_COPY,
   ALPHA_VS_KAPPA_DISCLOSURE,
   alphaFromPairCounts,
   alphaReplicateContext,
@@ -207,5 +208,55 @@ describe("krippendorffAlpha — the disclosures (AC-34/AC-50)", () => {
     expect(ALPHA_CEILING_NEEDS_RATERS).toBe(
       "Human ceiling needs ≥2 human raters per example."
     );
+  });
+});
+
+/**
+ * A4 / AC-08: α is null with a reason — NEVER NaN. Extreme-but-finite numeric
+ * labels (±1e155) make the interval δ² overflow `observed`/`expected` to
+ * Infinity, and Inf/Inf is NaN; the guard turns that into an honest undefined
+ * with the reason instead of a NaN floating into the report.
+ */
+describe("krippendorffAlpha — extreme labels never produce NaN (A4)", () => {
+  const HUGE = "1e155";
+  const TINY = "-1e155";
+
+  it("interval α with ±1e155 labels is null with the undefined reason", () => {
+    const units = [
+      [HUGE, TINY],
+      [TINY, HUGE],
+      [HUGE, HUGE],
+      [TINY, HUGE],
+      [HUGE, TINY],
+    ];
+    const result = krippendorffAlpha(units, "interval");
+    expect(result.value).toBeNull();
+    expect(result.reason).toBe(ALPHA_UNDEFINED_COPY);
+    expect(Number.isNaN(result.value)).toBe(false);
+  });
+
+  it("the same extreme labels are unambiguous at the nominal level (no overflow path)", () => {
+    // Nominal δ is 1 regardless of magnitude, so the ratio stays finite and
+    // the guard is not needed — the value is a real coefficient, not NaN.
+    const units = [
+      [HUGE, TINY],
+      [TINY, HUGE],
+      [HUGE, HUGE],
+      [TINY, HUGE],
+    ];
+    const result = krippendorffAlpha(units);
+    expect(Number.isNaN(result.value)).toBe(false);
+    expect(result.value).not.toBeNull();
+  });
+
+  it("the bootstrap replicate path drops a non-finite α replicate instead of poisoning the percentile", () => {
+    const ctx = alphaReplicateContext([HUGE, TINY], "interval");
+    expect(ctx).not.toBeNull();
+    if (ctx === null) return;
+    // counts[human * 2 + judge] — every unit disagrees across the two classes.
+    const counts = new Int32Array(4);
+    counts[0 * 2 + 1] = 5; // human HUGE, judge TINY
+    counts[1 * 2 + 0] = 5; // human TINY, judge HUGE
+    expect(alphaFromPairCounts(counts, 2, ctx)).toBeNull();
   });
 });

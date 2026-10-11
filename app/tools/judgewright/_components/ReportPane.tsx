@@ -819,7 +819,7 @@ function DisagreementTable({ report }: { report: CalibrationReport }) {
       >
         {disagreementsOnly
           ? `${visible.length.toLocaleString("en-US")} of ${disagreementsHidden.toLocaleString("en-US")} shown disagreements in this window`
-          : `showing ${visible.length.toLocaleString("en-US")} of ${totalRows.toLocaleString("en-US")} rows — the table caps at ${MAX_TABLE_ROWS.toLocaleString("en-US")}; the full set is pulled on demand for export and diagnosis`}
+          : `showing ${visible.length.toLocaleString("en-US")} of ${totalRows.toLocaleString("en-US")} rows — the table caps at ${MAX_TABLE_ROWS.toLocaleString("en-US")}; the export and the diagnosis read this same window, so the numbers never differ by engine`}
       </p>
       <div className="mt-2 max-h-72 overflow-y-auto">
         <table className="w-full border-collapse text-xs">

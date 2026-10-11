@@ -280,6 +280,13 @@ export interface ComputeOptions {
   rowCount?: number;
   /** Cooperative budget (worker 1,000, sync 800). */
   deadlineMs?: number;
+  /**
+   * A2 — the cooperative budget as an ABSOLUTE timestamp (`Date.now()`), so it
+   * covers the WHOLE pipeline (parse included) instead of only the compute
+   * phases. Supplied by `analyzeVerdicts`; without it the budget starts at
+   * `computeReport`. A trip drops the CIs (never a point statistic).
+   */
+  deadlineAt?: number;
   /** Which engine is running — stamped into the report, never guessed. */
   engine?: ComputeEngine;
 }
@@ -302,6 +309,15 @@ export interface CalibrationReport {
   /** The headline name for the same exact-match agreement figure. */
   rawAgreement: number;
   agreementRows: number;
+  /**
+   * A3 — the TRUE agreeing-row count over the FULL analyzed set, never the
+   * display window — the worker payload ships only `MAX_TABLE_ROWS` rows, so
+   * a windowed count printed as a total is a fabricated number; these two
+   * fields are the honest totals the export and the card print.
+   */
+  agreementTotal: number;
+  /** The TRUE disagreeing-row count over the FULL analyzed set. */
+  disagreementTotal: number;
   confusion: ConfusionMatrix;
   binaryMetrics: BinaryMetrics | null;
   multiclass: MulticlassMetrics | null;
@@ -342,7 +358,9 @@ export interface CalibrationReport {
    * The per-example rows. The pure core fills ALL analyzed rows; the worker
    * payload ships the first `MAX_TABLE_ROWS` as the display window (see
    * `reportDisagreementWindow`), because the full set is never
-   * structured-cloned per dispatch — it is pulled on demand for export/LLM.
+   * structured-cloned per dispatch. The SETTLED report — the one the store,
+   * the exports and the diagnosis selection read — always carries this same
+   * window on both engines, so no exported artifact differs by engine (A3).
    */
   disagreements: DisagreementRow[];
   /** Markdown: exact formula + inputs so a reviewer can recompute. */

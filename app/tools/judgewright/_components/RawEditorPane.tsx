@@ -8,7 +8,10 @@ import { useToolStore } from "../_store/useToolStore";
 /**
  * The paste station: verdicts (JSONL or CSV) on top, the optional rubric
  * below. Both are controlled store fields and the only persisted content
- * (`judgewright-tool-storage`), so a reload restores the session exactly.
+ * (`judgewright-tool-storage`), so a reload restores the session — for a
+ * paste over MAX_PERSISTED_TEXT_CHARS the store deliberately does NOT persist
+ * the verdicts (an over-quota write would throw and lose the session), and the
+ * error boundary says so plainly.
  */
 export function RawEditorPane() {
   const verdictsText = useToolStore((s) => s.verdictsText);

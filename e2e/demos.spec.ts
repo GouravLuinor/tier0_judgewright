@@ -13,6 +13,11 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
  *      must be identical to the worker run (SPEC S4).
  *   3. The copy path: ⌘⇧C copies the current output and shows the brand-lime
  *      success toast; the failure toast is rose.
+ *   4. A1: a paste beyond the storage quota is never persisted (no crash, no
+ *      data-losing throw) and still computes; a quota-exceeded write is
+ *      swallowed and the session keeps running.
+ *   5. A5: the watchdog abort settles atomically — the error is present and
+ *      the previous paste's stat card is gone in the same frame.
  */
 
 const TOOL_URL = "/tools/judgewright";
@@ -46,11 +51,35 @@ async function waitClientReady(page: Page) {
   );
 }
 
-async function fillStable(locator: Locator, value: string) {
+async function fillStable(
+  locator: Locator,
+  value: string,
+  timeout: number = COMPUTE_TIMEOUT
+) {
   await expect(async () => {
     await locator.fill(value);
     await expect(locator).toHaveValue(value);
-  }).toPass({ timeout: COMPUTE_TIMEOUT });
+  }).toPass({ timeout });
+}
+
+/**
+ * A multi-MB fill cannot go through `locator.fill` — the value re-serializes
+ * through CDP on every retry. The native setter commits exactly like a user
+ * paste in one round-trip.
+ */
+async function fillHuge(locator: Locator, value: string) {
+  await expect(async () => {
+    await locator.evaluate((element, text) => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      if (!setter) throw new Error("value setter unavailable");
+      setter.call(element, text);
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    }, value);
+    await expect(locator).toHaveValue(value);
+  }).toPass({ timeout: 90_000 });
 }
 
 async function gotoReady(page: Page) {
@@ -326,5 +355,144 @@ test.describe("Judgewright live-compute demos", () => {
       expect(shape.hasError).toBe(true);
       expect(shape.hasStats).toBe(false);
     }
+  });
+
+  // ── A1: persistence is bounded and quota failures fail soft ──────────────
+  test("A1: an over-quota paste is not persisted, and still computes with no crash", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    // Every uncaught page error is the bug this fix removes: a QuotaExceeded
+    // throw escaping the store's set() unmounts the tree to the error screen.
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
+
+    // ~8.6 MB of verdicts — beyond every browser storage quota (≈5–10 MB,
+    // measured in UTF-16 units) yet far inside MAX_INPUT_CHARS.
+    const rows = 120_000;
+    const big = Array.from(
+      { length: rows },
+      (_, i) =>
+        `{"example_id":"quota-${String(i).padStart(6, "0")}","judge_label":"${
+          i % 3 === 0 ? "fail" : "pass"
+        }","human_label":"${i % 2 === 0 ? "pass" : "fail"}"}`
+    ).join("\n");
+    expect(big.length).toBeGreaterThan(8_000_000);
+
+    await fillHuge(verdictsInput(page), big);
+
+    // Still computes — ready, with statistics, and no crash screen.
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "ready",
+      { timeout: 60_000 }
+    );
+    await expect(page.locator("[data-stat]")).not.toHaveCount(0);
+    await expect(statValue(page, "characters")).toHaveText(
+      big.length.toLocaleString("en-US"),
+      { timeout: 60_000 }
+    );
+
+    // The over-quota paste was deliberately NOT written: the persisted payload
+    // holds the rubric + settings only, so the reload story is honest (large
+    // sessions are not restored) instead of a quota crash.
+    const persisted = await page.evaluate(() =>
+      window.localStorage.getItem("judgewright-tool-storage")
+    );
+    expect(persisted).not.toBeNull();
+    expect(persisted!.length).toBeLessThan(10_000);
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("A1: a quota-exceeded write is swallowed — the session keeps computing", async ({
+    page,
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
+
+    // Force every storage write to throw, the way a full quota does. The
+    // guarded persist layer must swallow it and self-disable instead of
+    // letting the throw escape the store's set().
+    await page.addInitScript(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException("QuotaExceededError", "QuotaExceededError");
+      };
+    });
+
+    await gotoReady(page);
+
+    // The seeded first-run report still settles even though every persist
+    // write throws, and a fresh paste still computes through it.
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "ready",
+      { timeout: COMPUTE_TIMEOUT }
+    );
+
+    await fillStable(verdictsInput(page), PAYLOAD);
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "ready",
+      { timeout: COMPUTE_TIMEOUT }
+    );
+    await expect(statValue(page, "characters")).toHaveText(String(PAYLOAD.length), {
+      timeout: COMPUTE_TIMEOUT,
+    });
+
+    expect(pageErrors).toEqual([]);
+  });
+
+  // ── A5: the watchdog abort settles atomically ─────────────────────────────
+  test("A5: the watchdog abort settles atomically — an error, never stale stats", async ({
+    page,
+  }) => {
+    const pageErrors: Error[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error));
+
+    // Swallow exactly one dispatch (the marker paste) so the worker never
+    // answers it: the watchdog must fire, terminate, respawn and settle.
+    await page.addInitScript(() => {
+      const original = Worker.prototype.postMessage;
+      Worker.prototype.postMessage = function (
+        this: Worker,
+        message: unknown
+      ) {
+        const payload = message as { verdictsText?: string };
+        if (
+          typeof payload?.verdictsText === "string" &&
+          payload.verdictsText.includes("HANG-DISPATCH")
+        ) {
+          return;
+        }
+        return original.call(this, message);
+      };
+    });
+
+    await gotoReady(page);
+    // A settled report exists first — the stale numbers the abort must clear.
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "ready",
+      { timeout: COMPUTE_TIMEOUT }
+    );
+    await expect(page.locator('[data-stat="characters"]')).toBeVisible();
+
+    const hang = `${PAYLOAD}\n{"example_id":"HANG-DISPATCH","judge_label":"pass","human_label":"pass"}`;
+    await fillStable(verdictsInput(page), hang);
+
+    // The watchdog verdict lands as an error …
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "error",
+      { timeout: COMPUTE_TIMEOUT }
+    );
+    await expect(page.locator("#report-error-message")).toContainText(
+      "Execution aborted — the compute budget was exceeded"
+    );
+    // … with the previous paste's statistics gone in the same settle: an error
+    // and a stat card can never render together.
+    await expect(page.locator("[data-stat]")).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
   });
 });

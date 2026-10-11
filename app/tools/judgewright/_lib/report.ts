@@ -149,10 +149,11 @@ export function computeReport(
 
   // ── Phase B: seeded bootstrap CIs (deadline-gated) ───────────────────────
   // B is a pure function of the row count; the seed comes from settings. The
-  // budget is an ABSOLUTE timestamp (`startedAt + deadlineMs`), the same
-  // convention every phase boundary uses.
+  // budget is an ABSOLUTE timestamp. A2: `analyzeVerdicts` supplies one taken
+  // BEFORE the parse, so the budget covers the whole pipeline; without it the
+  // budget starts here.
   const bootstrapReplicates = bootstrapTier(n);
-  const deadlineAt = startedAt + deadlineMs;
+  const deadlineAt = options.deadlineAt ?? startedAt + deadlineMs;
   const panel =
     n >= 2 && labels.length >= 2 ? encodePanel(judgeLabels, humanLabels) : null;
   const alphaCtx =
@@ -175,11 +176,18 @@ export function computeReport(
     });
     ci = { accuracy: bundle.accuracy, kappa: bundle.kappa, alpha: bundle.alpha };
     ciDropped = bundle.deadlineHit;
+  } else if (panel !== null) {
+    // A2: the budget was already spent (typically by a large parse). The
+    // report STILL settles — the point statistics above are untouched — and
+    // the dropped CIs are named rather than left silently absent with
+    // `ciDropped: false`.
+    ciDropped = true;
   }
 
   // ── Settlement ───────────────────────────────────────────────────────────
-  const elapsedMs = Date.now() - startedAt;
-  const deadlineHit = elapsedMs > deadlineMs;
+  // A2: the budget boundary is the ABSOLUTE deadline (parse included), so the
+  // receipt names a trip even when the parse consumed the whole budget.
+  const deadlineHit = Date.now() > deadlineAt;
 
   const report: CalibrationReport = {
     n,
@@ -190,6 +198,11 @@ export function computeReport(
     accuracy,
     rawAgreement: accuracy,
     agreementRows: agreementCells,
+    // A3: the TRUE totals over the FULL analyzed set — never the display
+    // cap. The store, the export and the card print these so a capped
+    // count can never masquerade as the total.
+    agreementTotal: agreementCells,
+    disagreementTotal: n - agreementCells,
     confusion,
     binaryMetrics:
       binary && positiveClass !== null

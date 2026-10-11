@@ -10,6 +10,7 @@ import {
   renderOneLineVerdict,
 } from "../_lib/reportRender";
 import { useAuthPromptStore } from "../_store/useAuthPromptStore";
+import { MAX_TABLE_ROWS } from "../_lib/constants";
 import type { VerdictAnalysis } from "../_lib/types";
 
 /**
@@ -18,6 +19,12 @@ import type { VerdictAnalysis } from "../_lib/types";
  * is an OFFER, never a lock; the Download button opens the (dismissible) offer
  * after the file has already been produced, so a no-account export never
  * depends on it.
+ *
+ * A3 — honest scope: the settled report carries the `MAX_TABLE_ROWS` display
+ * window (the same one on both engines), so the JSONL export is window-scoped
+ * and says so. The TRUE full-set agreement/disagreement totals ride beside it
+ * from `agreementTotal`/`disagreementTotal`, never a window count printed as a
+ * total.
  */
 function download(filename: string, text: string): boolean {
   try {
@@ -52,6 +59,11 @@ async function copyArtifact(label: string, text: string): Promise<void> {
 export function ExportBar({ stats }: { stats: VerdictAnalysis }) {
   const openAuthPrompt = useAuthPromptStore((s) => s.open);
   const report = stats.report;
+  const count = (value: number) => value.toLocaleString("en-US");
+  const jsonlScope =
+    report.disagreements.length < report.n
+      ? `JSONL carries ${count(report.disagreements.length)} rows within the first ${count(MAX_TABLE_ROWS)} shown · ${count(report.agreementTotal)} agreements and ${count(report.disagreementTotal)} disagreements in the full ${count(report.n)}-row set — the same window on both engines`
+      : `JSONL carries all ${count(report.n)} analyzed rows — the whole set fits inside the display window`;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -99,6 +111,12 @@ export function ExportBar({ stats }: { stats: VerdictAnalysis }) {
         <Download className="h-3.5 w-3.5" aria-hidden="true" />
         Download
       </Button>
+      <p
+        className="w-full font-mono text-[10px] leading-relaxed text-zinc-500"
+        data-export-scope
+      >
+        {jsonlScope}
+      </p>
     </div>
   );
 }

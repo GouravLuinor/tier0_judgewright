@@ -12,7 +12,7 @@ import {
   DEBOUNCE_XLARGE_MS,
   SUCCESS_ANNOUNCE_DEBOUNCE_MS,
   SYNC_DEADLINE_MS,
-  WATCHDOG_MS,
+  watchdogMsFor,
 } from "../_lib/constants";
 import type {
   ComputationResult,
@@ -28,7 +28,9 @@ import { useToolStore } from "../_store/useToolStore";
  * Contract (BAR §4.3, ARCHITECTURE §5), verbatim from the sibling pattern:
  *   · monotonic request ids with a stale-response guard (newest wins)
  *   · adaptive debounce by input length: 0 / 40 / 120 / 250 ms
- *   · 1.5s watchdog → terminate + respawn + a friendly error
+ *   · a watchdog tiered by payload size (`watchdogMsFor`) → terminate +
+ *     respawn + an atomically-settled error (A2: an in-cap 200k dispatch is
+ *     never aborted at the small-paste wall)
  *   · ONE degradation path (`degradeToMainThread`) that runs the SAME pure
  *     core synchronously under the stricter SYNC_DEADLINE_MS
  *   · successes announce behind an 800ms trailing debounce; errors settle now
@@ -36,6 +38,19 @@ import { useToolStore } from "../_store/useToolStore";
 
 /** Neutral in-flight crash copy — never let the watchdog verdict fabricate one. */
 const WORKER_CRASH_ERROR = "Worker crashed — switched to main-thread mode";
+
+/** A2: the watchdog verdict — an honest budget story, never a fabricated one. */
+const WATCHDOG_ABORT_ERROR =
+  "Execution aborted — the compute budget was exceeded";
+
+/**
+ * The stale-response guard (BAR §4.3), extracted so the worker protocol is
+ * unit-testable without a DOM: a reply older than the newest dispatch is
+ * dropped BEFORE it can touch state.
+ */
+export function isStaleReply(replyId: number, currentRequestId: number): boolean {
+  return replyId < currentRequestId;
+}
 
 function debounceFor(length: number): number {
   if (length > DEBOUNCE_XLARGE_MAX_CHARS) return DEBOUNCE_XLARGE_MS;
@@ -51,7 +66,6 @@ export function useToolWorker() {
 
   const applyComputation = useToolStore((s) => s.applyComputation);
   const setIsProcessing = useToolStore((s) => s.setIsProcessing);
-  const setErrorMessage = useToolStore((s) => s.setErrorMessage);
   const setWorkerAvailable = useToolStore((s) => s.setWorkerAvailable);
   const announceStatus = useToolStore((s) => s.announceStatus);
 
@@ -109,16 +123,27 @@ export function useToolWorker() {
       workerRef.current = null;
       setWorkerAvailable(false);
       setIsProcessing(false);
-      if (inFlightError) setErrorMessage(inFlightError);
+      if (inFlightError) {
+        // A5: settle atomically through the store's ONE atomic action — the
+        // in-flight failure clears the previous paste's numbers in the SAME
+        // set() that records the error, so an error and a stale stat card
+        // can never render together.
+        applyComputation({
+          ok: false,
+          error: inFlightError,
+          degraded: true,
+          stats: null,
+        });
+      }
       announceStatus(notice);
     },
     [
+      applyComputation,
       clearDebounce,
       clearWatchdog,
       clearSuccessAnnouncement,
       setWorkerAvailable,
       setIsProcessing,
-      setErrorMessage,
       announceStatus,
     ]
   );
@@ -153,7 +178,7 @@ export function useToolWorker() {
     (event: MessageEvent<WorkerOutputPayload>) => {
       // Stale-response guard FIRST: a late reply must never touch state or
       // the watchdog protecting a newer dispatch (the C1 race).
-      if (event.data.id < requestIdRef.current) return;
+      if (isStaleReply(event.data.id, requestIdRef.current)) return;
       if (event.data.id === watchdogIdRef.current) clearWatchdog();
 
       setIsProcessing(false);
@@ -233,7 +258,10 @@ export function useToolWorker() {
 
       if (!degradedRef.current && worker) {
         // Watchdog: an unkillable hang inside the worker (a bug, or an
-        // extension-hostile environment) must never freeze the UI.
+        // extension-hostile environment) must never freeze the UI. A2: the
+        // budget is TIERED by payload size — an in-cap 200k-row dispatch
+        // legitimately needs seconds, and a flat 1.5s wall would abort it and
+        // discard a report AC-27/AC-59 promise.
         watchdogIdRef.current = id;
         watchdogRef.current = setTimeout(() => {
           worker.terminate();
@@ -247,10 +275,17 @@ export function useToolWorker() {
             workerRef.current = spawnWorker();
           }
 
+          // A5: the abort settles ATOMICALLY through the store's one action —
+          // stats and the window are cleared in the same set() that records
+          // the error, so the previous paste's numbers never render beside it.
           setIsProcessing(false);
-          setErrorMessage("Execution aborted — the compute budget was exceeded");
-          announceStatus("Execution aborted — the compute budget was exceeded");
-        }, WATCHDOG_MS);
+          applyComputation({
+            ok: false,
+            error: WATCHDOG_ABORT_ERROR,
+            degraded: false,
+            stats: null,
+          });
+        }, watchdogMsFor(inputRef.current.verdictsText.length));
 
         worker.postMessage({
           id,
@@ -284,11 +319,15 @@ export function useToolWorker() {
         });
       } catch (err) {
         clearSuccessAnnouncement();
-        setIsProcessing(false);
-        setErrorMessage(
-          err instanceof Error ? err.message : "Unexpected processing error"
-        );
-        announceStatus("Processing failed");
+        // A5: an unexpected throw settles the same atomic way — the error and
+        // the cleared stats land together, never a stale card beside it.
+        applyComputation({
+          ok: false,
+          error:
+            err instanceof Error ? err.message : "Unexpected processing error",
+          degraded: true,
+          stats: null,
+        });
       }
     }, debounceFor(verdictsText.length));
 
@@ -302,8 +341,8 @@ export function useToolWorker() {
     settings,
     handleResult,
     spawnWorker,
+    applyComputation,
     setIsProcessing,
-    setErrorMessage,
     announceStatus,
     clearDebounce,
     clearWatchdog,

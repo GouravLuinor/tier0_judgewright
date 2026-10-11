@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { useToolStore } from "../_store/useToolStore";
+import { MAX_TABLE_ROWS } from "../_lib/constants";
 import {
   DEFAULT_DIAGNOSIS_MODEL,
   DIAGNOSIS_CONFIGURE_COPY,
@@ -134,7 +135,10 @@ export function DiagnosisPanel() {
         </span>
       </div>
       <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
-        {DIAGNOSIS_ONE_CALL_COPY}
+        {DIAGNOSIS_ONE_CALL_COPY} The ≤25 rows are drawn from the first{" "}
+        {MAX_TABLE_ROWS.toLocaleString("en-US")} analyzed rows this session
+        settled — the same window the table and the export read, so the
+        selection never depends on which engine computed the report.
       </p>
 
       {diagnosisState === "configure-key" && (

@@ -12,6 +12,13 @@
  * is named, never invented. D3 adds the ECE/Brier + bias sections to the
  * markdown card, prints the positive class in the receipt (AC-51), and the
  * agreement JSONL export (`renderAgreementJsonl`).
+ *
+ * A3 — window honesty: the settled report's `disagreements` is always the
+ * `MAX_TABLE_ROWS` display window (the worker never ships more, and the store
+ * settles the same window on the main-thread fallback, so every artifact is
+ * engine-independent). A count derived from that window is therefore labelled
+ * with its scope, while `agreementTotal`/`disagreementTotal` carry the TRUE
+ * full-set figures the export prints.
  */
 
 import { bootstrapTierCopy } from "./bootstrapCI.ts";
@@ -22,6 +29,7 @@ import {
   ALPHA_VS_KAPPA_DISCLOSURE,
 } from "./krippendorffAlpha.ts";
 import { NEGATIVE_KAPPA_COPY } from "./grade.ts";
+import { MAX_TABLE_ROWS } from "./constants.ts";
 import type { CalibrationReport, ConfidenceInterval } from "./types";
 
 /** The integer-rational receipt inputs, recomputed by hand by a reviewer. */
@@ -223,6 +231,14 @@ export function renderOneLineVerdict(report: CalibrationReport): string {
  * `{example_id, judge_label, human_label, agree}`. The fields are format-derived
  * and stable, so a JSONL input and the identical CSV input produce byte-equal
  * exports — the export proves the two formats settled the same report.
+ *
+ * A3 scope: the rows available here are the settled display window (the first
+ * `MAX_TABLE_ROWS` rows — the worker never posts more, and the main-thread
+ * fallback settles the same window, so the export is byte-identical on both
+ * engines). The TRUE full-set totals ride on the report
+ * (`agreementTotal`/`disagreementTotal`) and are printed by the markdown card
+ * and the export bar beside this window, so the scope is disclosed rather
+ * than a window count passing for a total.
  */
 export function renderAgreementJsonl(report: CalibrationReport): string {
   return report.disagreements
@@ -381,10 +397,17 @@ export function renderMarkdownReport(report: CalibrationReport): string {
   }
   lines.push("");
 
+  // A3: the TRUE full-set total, then the window's own scope — a count taken
+  // from the display window never prints as the total.
   const shown = report.disagreements.length;
-  const disagreements = report.disagreements.filter((row) => !row.agree);
   lines.push(
-    `Disagreements: ${formatCount(disagreements.length)} of ${formatCount(report.n)} rows disagree (showing ${formatCount(shown)} of ${formatCount(report.n)})`
+    `Disagreements: ${formatCount(report.disagreementTotal)} of ${formatCount(report.n)} rows disagree` +
+      (shown < report.n
+        ? ` (showing ${formatCount(shown)} of ${formatCount(report.n)} rows in this card; the row window caps at ${formatCount(MAX_TABLE_ROWS)})`
+        : "")
+  );
+  lines.push(
+    `Agreements: ${formatCount(report.agreementTotal)} of ${formatCount(report.n)} rows — the full-set totals above are independent of the display window`
   );
   lines.push("");
 

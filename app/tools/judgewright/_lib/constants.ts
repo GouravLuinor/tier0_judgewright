@@ -49,6 +49,16 @@ export const DIAGNOSIS_DISAGREEMENT_LIMIT = 25;
  */
 export const MAX_PARSE_ISSUES = 5;
 
+/**
+ * A1 — the largest paste the store PERSISTS for reload. A judge session can
+ * legally reach MAX_INPUT_CHARS (40 MB), but no browser storage quota holds
+ * that: an unbounded write throws QuotaExceededError out of the store's
+ * `set()`, which unmounts the tree and loses the paste. The persisted slice is
+ * therefore BOUNDED — pastes above this length are not written at all (the
+ * settings and rubric still are), and a reload simply does not restore them.
+ */
+export const MAX_PERSISTED_TEXT_CHARS = 1_000_000;
+
 // ── Bootstrap tiers (deterministic; never wall-clock adaptive) ─────────────
 export const BOOTSTRAP_B = 2_000;
 /** Lower bound so a CI is still reported at tiny n. */
@@ -73,6 +83,33 @@ export const WORKER_DEADLINE_MS = 1_000;
 export const SYNC_DEADLINE_MS = 800;
 /** Hard wall-clock before terminate + respawn. */
 export const WATCHDOG_MS = 1_500;
+/**
+ * A2 — the watchdog budget is TIERED by dispatch size. The 1.5s wall is right
+ * for a small paste, but an in-cap 200k-row dispatch legitimately needs
+ * seconds (parse + point statistics + the tiered bootstrap); killing it at
+ * 1.5s aborts a legitimate run and discards the whole report. The budget
+ * therefore steps up with the payload and stays bounded, so a genuine
+ * unkillable hang still trips the watchdog.
+ */
+export const WATCHDOG_TIERS: readonly { maxChars: number; ms: number }[] = [
+  { maxChars: 20_000, ms: WATCHDOG_MS },
+  { maxChars: 200_000, ms: 3_000 },
+  { maxChars: 2_000_000, ms: 5_000 },
+  { maxChars: Number.POSITIVE_INFINITY, ms: 8_000 },
+];
+
+/**
+ * The watchdog budget for one dispatch: monotonic non-decreasing in payload
+ * size, always finite, and never below WATCHDOG_MS (asserted in
+ * `_hooks/__tests__/useJudgewrightWorker.test.ts`).
+ */
+export function watchdogMsFor(chars: number): number {
+  const length = Number.isFinite(chars) ? Math.max(0, Math.floor(chars)) : 0;
+  for (const tier of WATCHDOG_TIERS) {
+    if (length <= tier.maxChars) return tier.ms;
+  }
+  return WATCHDOG_TIERS[WATCHDOG_TIERS.length - 1]?.ms ?? WATCHDOG_MS;
+}
 /** Collapse typing bursts into one screen-reader update. */
 export const SUCCESS_ANNOUNCE_DEBOUNCE_MS = 800;
 

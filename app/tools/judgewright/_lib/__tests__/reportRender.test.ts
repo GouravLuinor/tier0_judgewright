@@ -15,6 +15,8 @@ import {
   ALPHA_VS_KAPPA_DISCLOSURE,
 } from "../krippendorffAlpha";
 import { GRADE_CONVENTION_COPY } from "../grade";
+import { MAX_TABLE_ROWS } from "../constants";
+import { reportDisagreementWindow } from "../report";
 import type { RawVerdict } from "../types";
 
 function headlineRows(): RawVerdict[] {
@@ -167,6 +169,60 @@ describe("renderMarkdownReport — the copy payload", () => {
 
   it("does not claim the α letter is α's own convention", () => {
     expect(markdown).toContain(ALPHA_KAPPA_BANDS_NOTE);
+  });
+});
+
+/**
+ * A3 — window honesty. The settled report's `disagreements` is the
+ * MAX_TABLE_ROWS display window (identical on both engines), so the card
+ * prints the TRUE totals and names the window's scope instead of passing a
+ * window count off as the total.
+ */
+describe("renderMarkdownReport — windowed scope is labelled, totals are true (A3)", () => {
+  const full = computeReport(headlineRows(), {
+    seed: 42,
+    confidenceLevel: 0.95,
+    deadlineMs: 1_000,
+    engine: "worker",
+  });
+  const windowed = reportDisagreementWindow(full, 0, MAX_TABLE_ROWS);
+
+  it("names the TRUE disagreement total beside the window scope", () => {
+    const markdown = renderMarkdownReport(windowed);
+    expect(markdown).toContain("Disagreements: 50 of 1,000 rows disagree");
+    // The window is the whole 1,000-row set here, so no truncated-scope note.
+    expect(markdown).not.toContain("(showing 1,000 of 1,000 rows in this card");
+  });
+
+  it("prints the full-set agreement total independently of the window", () => {
+    const markdown = renderMarkdownReport(windowed);
+    expect(markdown).toContain(
+      "Agreements: 950 of 1,000 rows — the full-set totals above are independent of the display window"
+    );
+  });
+
+  it("a report whose window is smaller than the whole set discloses the cap", () => {
+    const sliced = reportDisagreementWindow(full, 0, 2);
+    const markdown = renderMarkdownReport(sliced);
+    // The TRUE total still reads 50 — never the 2 rows inside the window.
+    expect(markdown).toContain("Disagreements: 50 of 1,000 rows disagree");
+    expect(markdown).toContain(
+      "(showing 2 of 1,000 rows in this card; the row window caps at 2,000)"
+    );
+  });
+
+  it("renderAgreementJsonl ships exactly the settled window — never a fabricated full set", () => {
+    const sliced = reportDisagreementWindow(full, 0, 2);
+    const lines = renderAgreementJsonl(sliced).split("\n");
+    // The export carries the window, not the 1,000 analyzed rows.
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe(
+      '{"example_id":"ex-0001","judge_label":"pos","human_label":"pos","agree":true}'
+    );
+    // The head row of the full-set export is the same row: the window is the
+    // head of the full set, so both engines' exports start identically.
+    expect(renderAgreementJsonl(full).split("\n")[0]).toBe(lines[0]);
+    expect(renderAgreementJsonl(full).split("\n")).toHaveLength(1_000);
   });
 });
 
