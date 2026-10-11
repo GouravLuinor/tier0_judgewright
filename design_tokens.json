@@ -1,0 +1,100 @@
+{
+  "$schema_note": "Machine-readable mirror of the Matchlight token ladder. Values are space-separated RGB triplets; components consume them via the token classes in tailwind.config.ts. Source of truth: app/globals.css.",
+  "version": "1.0.0",
+  "generated": "2026-10-11",
+  "colorSpace": "rgb-triplets",
+  "opacityOpacityImplementation": "rgb(var(--token) / <alpha-value>) — keeps every Tailwind /opacity modifier working in both themes",
+  "tokens": {
+    "$comment": "Semantic surface ladder.",
+    "canvas": {
+      "light": "250 250 247",
+      "dark": "12 14 11",
+      "usage": "Page background"
+    },
+    "ink": {
+      "light": "24 26 22",
+      "dark": "236 238 228",
+      "usage": "Primary text"
+    },
+    "surface": {
+      "base": { "light": "252 252 250", "dark": "14 16 13" },
+      "subtle": { "light": "240 241 235", "dark": "23 26 21" },
+      "default": { "light": "255 255 255", "dark": "23 26 21" },
+      "elevated": { "light": "240 241 235", "dark": "35 39 31" },
+      "border": { "light": "229 231 221", "dark": "46 51 40" }
+    },
+    "brand": {
+      "$comment": "One accent (lime) + semantic state colors. Never used for decoration.",
+      "lime": { "light": "77 124 15", "dark": "190 242 100", "role": "accent" },
+      "violet": { "light": "109 40 217", "dark": "167 139 250", "role": "semantic-promotion" },
+      "amber": { "light": "180 83 9", "dark": "252 228 130", "role": "semantic-warning" },
+      "rose": { "light": "190 18 60", "dark": "253 164 175", "role": "semantic-error" }
+    },
+    "code": {
+      "$comment": "Reserved for code surfaces only.",
+      "keyword": { "light": "109 40 217", "dark": "167 139 250" },
+      "type": { "light": "6 95 70", "dark": "110 231 183" },
+      "prop": { "light": "12 74 110", "dark": "125 211 252" },
+      "str": { "light": "77 124 15", "dark": "190 242 100" },
+      "num": { "light": "190 18 60", "dark": "253 164 175" },
+      "punct": { "light": "113 113 122", "dark": "161 166 151" },
+      "comment": { "light": "113 113 122", "dark": "161 166 151" }
+    },
+    "zincInverted": {
+      "$comment": "The ONLY permitted neutral outside the ladder, inverted per theme: :root defines dark-on-light, .dark overrides to light-on-dark. text-zinc-100 = headings · 300 = secondary · 400 = muted labels · 500 = faint mono captions.",
+      "ink": { "light": "39 39 42", "dark": "244 244 245" },
+      "textPrimary": { "light": "24 24 27", "dark": "250 250 250" },
+      "textSecondary": { "light": "63 63 70", "dark": "161 161 170" },
+      "textMuted": { "light": "82 82 91", "dark": "161 161 170" },
+      "textFaint": { "light": "113 113 122", "dark": "113 113 122" },
+      "border": { "light": "228 228 231", "dark": "63 63 70" }
+    }
+  },
+  "typography": {
+    "sans": ["var(--font-inter)", "Inter"],
+    "mono": ["var(--font-jetbrains-mono)", "JetBrains Mono"],
+    "monoUsage": "Machine data only: verdicts, code, stats, dates, chords, badges, captions",
+    "scale": {
+      "h1": "text-xl sm:text-2xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-sm font-semibold tracking-tight",
+      "body": "text-sm leading-relaxed text-zinc-400",
+      "caption": "font-mono text-[10px] uppercase tracking-wider text-zinc-400"
+    }
+  },
+  "radius": {
+    "policy": "Hard cap rounded-2xl for the biggest surface; components use rounded-lg / rounded-xl / rounded-md.",
+    "values": { "sm": "rounded-md", "md": "rounded-lg", "lg": "rounded-xl", "xl": "rounded-2xl" }
+  },
+  "shadow": {
+    "raycast": "0 1px 2px rgb(var(--ink) / 0.08), inset 0 1px 0 0 rgb(255 255 255 / 0.6)",
+    "elevated": "0 12px 40px rgb(var(--ink) / 0.10)",
+    "rule": "No glow, no colored shadow, no blur."
+  },
+  "blur": { "value": "backdrop-blur-[6px] (header only)", "rule": "Machined hairline edge, never frosted glass." },
+  "motion": {
+    "curve": "ease-out-expo (cubic-bezier(0.16, 1, 0.3, 1))",
+    "durationsMs": [150, 180, 300],
+    "rule": "No opacity-only fades. Only compositor-friendly properties (transform, opacity, background-color, border-color, color).",
+    "reducedMotion": "Global kill-switch in globals.css zeroes transitions and animations under prefers-reduced-motion: reduce.",
+    "animationRuntimes": []
+  },
+  "interactionStates": {
+    "required": ["default", "hover", "focus-visible", "active", "disabled-or-loading"],
+    "rule": "Every interactive element implements all five."
+  },
+  "layer1": {
+    "canvas": "rgb(var(--canvas))",
+    "ink": "rgb(var(--ink))",
+    "rgba001": "rgb(0 0 0 / 0.003)"
+  },
+  "forbidden": [
+    "default Tailwind palette colors (sky/emerald/indigo/blue… without a token)",
+    "raw hex colors outside :root and .dark",
+    "adjectives-as-colors (elegant grey, professional white)",
+    "glow / colored shadow / heavy blur",
+    "more than one accent",
+    "rounded-3xl and larger",
+    "framer-motion and other animation runtimes"
+  ]
+}

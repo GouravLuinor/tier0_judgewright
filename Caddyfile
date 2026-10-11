@@ -1,0 +1,15 @@
+# Judgewright — TLS termination + reverse proxy to the standalone container.
+#
+# Caddy obtains and renews Let's Encrypt certificates automatically. The tool
+# itself binds 127.0.0.1:3005 (see docker-compose.yml), so TLS is terminated
+# exactly once, here.
+
+judge.norai.tech {
+    reverse_proxy judge-norai:3005 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    encode gzip zstd
+}

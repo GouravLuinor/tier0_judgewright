@@ -9,3 +9,8 @@ playwright-report/
 .env
 .DS_Store
 .tmpverify/
+
+# coverage (routes->js, out.json) — generated, never committed
+
+# local env (real secrets never commit)
+.env.local
