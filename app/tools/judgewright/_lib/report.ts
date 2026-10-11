@@ -2,29 +2,40 @@
  * Judgewright — computeReport: the single source of semantics (BAR §4.2).
  *
  * The Web Worker and the synchronous main-thread fallback BOTH call this
- * function, so the two paths cannot drift. D1 computes only the point
- * statistics: the label set, the counts, the confusion matrix, the
- * binary / k-class metrics, the UNWEIGHTED Cohen's κ, the always-majority
- * chance baseline and the reproducibility receipt.
+ * function, so the two paths cannot drift. Phase A (confusion, metrics,
+ * unweighted κ, baseline, α, weighted κ, grade, deflation, the disagreement
+ * rows) is always cheap and always runs. Phase B — the seeded bootstrap CIs —
+ * runs only while the cooperative budget remains, and may be aborted, but an
+ * abort can never change a point statistic, the reported B or a baseline
+ * (AGENTS §31).
  *
- * Everything a later milestone owns (Krippendorff's α, seeded bootstrap CIs,
- * ECE/Brier, the letter grade, position/verbosity bias, the per-example
- * disagreement rows) is present as a typed `null`/empty seam — never a
- * fabricated value — and every phase runs under the cooperative deadline,
- * which may abort deferred work but never changes a point statistic.
+ * Every field a milestone owns is filled by that milestone's module: α and the
+ * weighted secondary rows came in D2 (`krippendorffAlpha.ts`,
+ * `cohensKappa.ts`), the CIs, the grade and the Δκ headline too; ECE/Brier and
+ * the position/verbosity bias panel stay typed seams for D3.
  */
 
+import {
+  alphaBootstrapTier,
+  bootstrapBundle,
+  bootstrapTier,
+  encodePanel,
+} from "./bootstrapCI.ts";
+import { chanceBaseline } from "./chanceBaseline.ts";
 import {
   binaryMetrics,
   confusionMatrix,
   defaultPositiveClass,
   multiclassMetrics,
 } from "./confusionMatrix";
-import { chanceBaseline } from "./chanceBaseline";
 import { cohensKappa, kappaReceiptInputs, kappaUndefinedReason } from "./cohensKappa";
-import { WORKER_DEADLINE_MS } from "./constants";
+import { MAX_TABLE_ROWS, WORKER_DEADLINE_MS } from "./constants";
+import { buildDisagreementRows } from "./disagreements.ts";
+import { landisKochLabel, letterGrade } from "./grade.ts";
+import { alphaReplicateContext, krippendorffAlpha } from "./krippendorffAlpha.ts";
 import { renderReceipt } from "./reportRender";
 import type {
+  AlphaLevel,
   BiasPanel,
   CalibrationReport,
   ComputeOptions,
@@ -43,7 +54,7 @@ const BIAS_SEAM: BiasPanel = {
 };
 
 /**
- * The D1 calibration report for one session of verdict rows.
+ * The D2 calibration report for one session of verdict rows.
  *
  * `rows` must already be parsed and validated (`parseVerdicts`); the row cap
  * is applied BEFORE this runs, and `options.truncated`/`options.rowCount`
@@ -56,6 +67,7 @@ export function computeReport(
   const startedAt = Date.now();
   const deadlineMs = options.deadlineMs ?? WORKER_DEADLINE_MS;
   const engine = options.engine ?? "worker";
+  const alphaLevel: AlphaLevel = options.alphaLevel ?? "nominal";
 
   const n = rows.length;
   const rowCount = options.rowCount ?? n;
@@ -65,7 +77,7 @@ export function computeReport(
   for (const row of rows) {
     judgeLabels.push(row.judgeLabel);
     // The FIRST human label is the reference label; extra raters feed the
-    // human-ceiling α in D2.
+    // human-ceiling α only.
     humanLabels.push(row.humanLabels[0] ?? "");
   }
 
@@ -83,22 +95,84 @@ export function computeReport(
   const positiveClass =
     options.positiveClass ?? defaultPositiveClass(judgeLabels, humanLabels);
 
-  // ── Phase B: κ + the chance baseline ────────────────────────────────────
+  // ── Phase A2: κ (unweighted headline + weighted secondary rows) ───────────
   const kappa = cohensKappa(judgeLabels, humanLabels, "unweighted");
   const kappaReason = kappaUndefinedReason(judgeLabels, humanLabels);
   const baseline = chanceBaseline(judgeLabels, humanLabels);
-
   const receiptInputs = kappaReceiptInputs(judgeLabels, humanLabels);
+
+  // The weighted rows share the single degenerate guard; they are labelled
+  // secondary and never reach the headline, the grade or the deflation.
+  const kappaLinear = kappaReason === null ? cohensKappa(judgeLabels, humanLabels, "linear") : null;
+  const kappaQuadratic =
+    kappaReason === null ? cohensKappa(judgeLabels, humanLabels, "quadratic") : null;
+
 
   // The deflation is a point statistic, not a CI: safe under any deadline.
   const deflation = kappa === null ? null : accuracy - kappa;
   const liftOverBaseline = accuracy - baseline.baselineAgreement;
 
-  // ── Deferred phases (typed seams — nothing fabricated) ──────────────────
-  // D2: krippendorffAlpha() over [judge, ...humanLabels]; D2: bootstrapBundle;
-  // D2: letterGrade(unweighted κ); D3: ece()/brier(); D3: biasMetrics();
-  // D3: the per-example disagreement rows. The cooperative deadline is
-  // checked at each phase boundary when those land.
+  // ── Phase A3: Krippendorff's α (panel + human ceiling) ────────────────────
+  const alphaPanelUnits: string[][] = rows.map((row) => [row.judgeLabel, ...row.humanLabels]);
+  const alphaPanelResult = krippendorffAlpha(alphaPanelUnits, alphaLevel, options.labelOrder);
+
+  // The ceiling drops the judge. It needs ≥2 human raters per example, so the
+  // widest human panel decides: one human rater ⇒ null + the rendered
+  // disclosure, never a guess (AC-34).
+  let widestHumanCount = 0;
+  for (const row of rows) {
+    if (row.humanLabels.length > widestHumanCount) widestHumanCount = row.humanLabels.length;
+  }
+  const alphaHumansResult =
+    widestHumanCount >= 2
+      ? krippendorffAlpha(
+          rows.map((row) => row.humanLabels),
+          alphaLevel,
+          options.labelOrder
+        )
+      : { value: null, reason: null, warning: null };
+
+  const alphaPanel = alphaPanelResult.value;
+  const alphaHumans = alphaHumansResult.value;
+  const alphaUndefinedReason = alphaPanelResult.reason ?? alphaHumansResult.reason ?? null;
+  const alphaWarning = alphaPanelResult.warning ?? alphaHumansResult.warning ?? null;
+
+  // ── Phase A4: grade + the per-example rows ───────────────────────────────
+  const grade = letterGrade(kappa);
+  const gradeLabel = landisKochLabel(kappa);
+  const disagreements = buildDisagreementRows(rows);
+
+  // ── Phase B: seeded bootstrap CIs (deadline-gated) ───────────────────────
+  // B is a pure function of the row count; the seed comes from settings. The
+  // budget is an ABSOLUTE timestamp (`startedAt + deadlineMs`), the same
+  // convention every phase boundary uses.
+  const bootstrapReplicates = bootstrapTier(n);
+  const deadlineAt = startedAt + deadlineMs;
+  const panel =
+    n >= 2 && labels.length >= 2 ? encodePanel(judgeLabels, humanLabels) : null;
+  const alphaCtx =
+    panel === null ? null : alphaReplicateContext(labels, alphaLevel, options.labelOrder);
+  const alphaBudget =
+    alphaCtx === null ? null : alphaBootstrapTier(n, bootstrapReplicates);
+
+  let ci: CalibrationReport["ci"] = { accuracy: null, kappa: null, alpha: null };
+  let ciDropped = false;
+
+  if (panel !== null && Date.now() <= deadlineAt) {
+    const bundle = bootstrapBundle(panel, {
+      seed: options.seed,
+      B: bootstrapReplicates,
+      alphaB: alphaBudget ?? undefined,
+      alpha: 1 - options.confidenceLevel,
+      alphaLevel,
+      alphaOrder: options.labelOrder,
+      deadlineAt,
+    });
+    ci = { accuracy: bundle.accuracy, kappa: bundle.kappa, alpha: bundle.alpha };
+    ciDropped = bundle.deadlineHit;
+  }
+
+  // ── Settlement ───────────────────────────────────────────────────────────
   const elapsedMs = Date.now() - startedAt;
   const deadlineHit = elapsedMs > deadlineMs;
 
@@ -118,29 +192,32 @@ export function computeReport(
         : null,
     multiclass: binary ? null : multiclassMetrics(confusion),
     kappa,
-    kappaLinear: null,
-    kappaQuadratic: null,
+    kappaLinear,
+    kappaQuadratic,
     kappaUndefinedReason: kappaReason,
-    alphaPanel: null,
-    alphaHumans: null,
-    alphaLevel: "nominal",
-    alphaUndefinedReason: null,
-    alphaWarning: null,
-    alphaReplicates: null,
+    alphaPanel,
+    alphaHumans,
+    alphaLevel,
+    alphaUndefinedReason,
+    alphaWarning,
+    // The α replicate budget the tier rule applied ("actually used" for the
+    // report, and the count the α CI really consumed, ride in
+    // `alphaBootstrapReplicates`).
+    alphaReplicates: alphaBudget,
     baseline,
     deflation,
     liftOverBaseline,
-    ci: { accuracy: null, kappa: null, alpha: null },
+    ci,
     calibration: null,
     bias: BIAS_SEAM,
-    grade: "—",
-    gradeLabel: "",
-    disagreements: [],
+    grade,
+    gradeLabel,
+    disagreements,
     receipt: "",
     executionTimeMs: 0,
-    bootstrapReplicates: 0,
-    alphaBootstrapReplicates: null,
-    ciDropped: false,
+    bootstrapReplicates,
+    alphaBootstrapReplicates: ci.alpha?.replicates ?? null,
+    ciDropped,
     engine,
     truncated: options.truncated ?? rowCount > n,
   };
@@ -157,3 +234,19 @@ export function computeReport(
 
   return report;
 }
+
+/** The one display window the worker payload ships (AC-16/AC-59 seam). */
+export function reportDisagreementWindow(
+  report: CalibrationReport,
+  offset = 0,
+  limit: number = MAX_TABLE_ROWS
+): CalibrationReport {
+  return {
+    ...report,
+    disagreements: report.disagreements.slice(
+      Math.max(0, Math.floor(offset)),
+      Math.max(0, Math.floor(offset)) + Math.max(1, Math.floor(limit))
+    ),
+  };
+}
+

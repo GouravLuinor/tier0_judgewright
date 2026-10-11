@@ -10,6 +10,11 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
+    // AC-13: the byte-reproducibility entry is run by `node
+    // --experimental-strip-types`, which resolves only fully specified
+    // specifiers, so the statistics core names its runtime dependencies with
+    // explicit `.ts` extensions. tsc is told to accept that (noEmit is on).
+    "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,

@@ -7,13 +7,21 @@
  * decimal is printed at 17 significant digits, and every percentage at one
  * decimal — the reviewer can recompute each one from the receipt inputs.
  *
- * D1 note: the canonical one-line golden of AC-55 (with the CI bracket)
- * lands with the M2 bootstrap; the D1 string carries the point statistics
- * only, never a fabricated interval.
+ * D2 note: the one-line verdict carries the κ CI bracket and the letter
+ * grade beside the point statistics; a CI that was dropped under the deadline
+ * is named, never invented. The canonical AC-55 golden file itself is checked
+ * in by the M2/M3 milestone.
  */
 
-import type { CalibrationReport } from "./types";
-import { KAPPA_UNDEFINED_COPY } from "./cohensKappa";
+import { bootstrapTierCopy } from "./bootstrapCI.ts";
+import { KAPPA_UNDEFINED_COPY } from "./cohensKappa.ts";
+import { GRADE_CONVENTION_COPY } from "./grade.ts";
+import {
+  ALPHA_KAPPA_BANDS_NOTE,
+  ALPHA_VS_KAPPA_DISCLOSURE,
+} from "./krippendorffAlpha.ts";
+import { NEGATIVE_KAPPA_COPY } from "./grade.ts";
+import type { CalibrationReport, ConfidenceInterval } from "./types";
 
 /** The integer-rational receipt inputs, recomputed by hand by a reviewer. */
 export interface KappaReceiptInputs {
@@ -111,12 +119,54 @@ export function renderReceipt(
       `Δκ (deflation) = raw agreement − κ = ${sigFigs(report.deflation)}`
     );
   }
+  lines.push(
+    `grade: ${report.grade}${report.gradeLabel ? ` (${report.gradeLabel})` : ""} — Landis–Koch bands applied to unweighted κ`
+  );
   lines.push("");
   lines.push(
-    `settings: seed ${String(context.seed)} · confidence ${String(context.confidenceLevel)} · deadline ${context.deadlineMs}ms${context.deadlineHit ? " (reached — deferred phases aborted; point statistics unchanged)" : ""}`
+    `Krippendorff's α (${report.alphaLevel}) over [judge, human1, …]: ${
+      report.alphaPanel === null
+        ? `undefined — ${report.alphaUndefinedReason ?? "not computable"}`
+        : sigFigs(report.alphaPanel)
+    }`
   );
   lines.push(
-    `bootstrap CIs: not computed in this build (the M2 milestone lands seeded, reproducible intervals)`
+    `α human ceiling (humans only): ${
+      report.alphaHumans === null ? "undefined (needs ≥2 human raters)" : sigFigs(report.alphaHumans)
+    }`
+  );
+  lines.push(`α disclosure: ${ALPHA_VS_KAPPA_DISCLOSURE}`);
+  if (report.alphaWarning !== null) lines.push(`α warning: ${report.alphaWarning}`);
+  lines.push("");
+  lines.push(
+    `weighted κ (secondary rows, 1 − D_o/D_e): linear ${
+      report.kappaLinear === null ? "undefined" : sigFigs(report.kappaLinear)
+    } · quadratic ${
+      report.kappaQuadratic === null ? "undefined" : sigFigs(report.kappaQuadratic)
+    }`
+  );
+  lines.push("");
+  lines.push(
+    `settings: seed ${String(context.seed)} · confidence ${String(context.confidenceLevel)} · deadline ${context.deadlineMs}ms${
+      context.deadlineHit
+        ? report.ciDropped
+          ? " (reached — the bootstrap CIs were dropped; the point statistics, the chance baseline and B are unchanged)"
+          : " (reached — the report settled at the budget; the intervals were still computed)"
+        : ""
+    }`
+  );
+  lines.push(
+    `bootstrap: seed ${String(context.seed)} · B ${formatCount(report.bootstrapReplicates)} · ${bootstrapTierCopy(report.n)} · percentile ${(100 * (1 - context.confidenceLevel)).toFixed(2)}%/2 — ${bootstrapSummary(report)}`
+  );
+  lines.push(
+    `ci: accuracy ${formatCi(report.ci.accuracy)} · kappa ${formatCi(report.ci.kappa)} · alpha ${formatCi(report.ci.alpha)}`
+  );
+  lines.push(
+    `engine: ${report.engine} · ciDropped: ${report.ciDropped ? "true" : "false"} · reason: ${
+      report.ciDropped
+        ? "the cooperative deadline was reached before the replicates completed; B and the point statistics are unchanged"
+        : "none (all replicates completed)"
+    }`
   );
   lines.push(
     `no transcendentals: every value above is +, −, ×, ÷ of doubles`
@@ -124,19 +174,46 @@ export function renderReceipt(
   return lines.join("\n");
 }
 
+/** One CI at 17 significant digits, or the reason it is absent. */
+function formatCi(ci: ConfidenceInterval | null): string {
+  if (ci === null) return "not computed";
+  return `${sigFigs(ci.low)} – ${sigFigs(ci.high)} (point ${sigFigs(ci.point)}, ${formatCount(ci.replicates)} replicates)`;
+}
+
+/** The α replicate budget and the count the α CI actually consumed. */
+function bootstrapSummary(report: CalibrationReport): string {
+  if (report.alphaReplicates === null) {
+    return `α replicates: not budgeted`;
+  }
+  return `α replicates: ${formatCount(report.alphaReplicates)} budgeted, ${
+    report.alphaBootstrapReplicates === null
+      ? "none consumed"
+      : `${formatCount(report.alphaBootstrapReplicates)} consumed`
+  }`;
+}
+
 /**
- * The one-line verdict (SPEC §2.4.3): judging-the-judge in a single line,
- * 17 significant digits on κ. D1 carries the point statistics only — the CI
- * bracket of the AC-55 golden lands with the bootstrap milestone.
+ * The one-line verdict (SPEC §2.4.3): judging-the-judge in a single line, 17
+ * significant digits on κ, the κ CI bracket in the AC-55 shape, and the letter
+ * grade. A κ below zero prints the systematic-disagreement copy instead of a
+ * number a reviewer would misread as agreement (AC-57); a CI that was dropped
+ * under the deadline is named rather than invented.
  */
 export function renderOneLineVerdict(report: CalibrationReport): string {
-  const accuracy = `acc ${percent(report.rawAgreement)}`;
+  const accuracy = report.ci.accuracy
+    ? `acc ${percent(report.rawAgreement)} [${percent(report.ci.accuracy.low)}–${percent(report.ci.accuracy.high)}]`
+    : `acc ${percent(report.rawAgreement)}`;
   const kappa =
     report.kappa === null
       ? `κ undefined (no label variance to correct for)`
-      : `κ ${sigFigs(report.kappa)}`;
+      : report.kappa < 0
+        ? `κ ${sigFigs(report.kappa)} — ${NEGATIVE_KAPPA_COPY}`
+        : report.ci.kappa
+          ? `κ ${sigFigs(report.kappa)} [${sigFigs(report.ci.kappa.low)}, ${sigFigs(report.ci.kappa.high)}]`
+          : `κ ${sigFigs(report.kappa)} (no CI — deadline reached)`;
+  const grade = report.kappa === null ? "" : ` · grade ${report.grade}`;
   const baseline = `always-majority ${percent(report.baseline.baselineAgreement)}`;
-  return `Human agreement: ${formatCount(report.n)} rows · ${accuracy} · ${kappa} · ${baseline}`;
+  return `Human agreement: ${formatCount(report.n)} rows · ${accuracy} · ${kappa}${grade} · ${baseline}`;
 }
 
 /**
@@ -152,11 +229,14 @@ export function renderMarkdownReport(report: CalibrationReport): string {
   );
   lines.push(`positive class: ${report.positiveClass ?? "—"}`);
   lines.push("");
-  lines.push(`RAW AGREEMENT (accuracy): ${percent(report.rawAgreement)}`);
+  lines.push(`RAW AGREEMENT (accuracy): ${percent(report.rawAgreement)}${ciBracket(report.ci.accuracy)}`);
   if (report.kappa === null) {
     lines.push(`UNWEIGHTED κ: undefined — ${KAPPA_UNDEFINED_COPY}`);
+  } else if (report.kappa < 0) {
+    lines.push(`UNWEIGHTED κ (chance-corrected): ${sigFigs(report.kappa)}${ciBracket(report.ci.kappa)}`);
+    lines.push(NEGATIVE_KAPPA_COPY);
   } else {
-    lines.push(`UNWEIGHTED κ (chance-corrected): ${sigFigs(report.kappa)}`);
+    lines.push(`UNWEIGHTED κ (chance-corrected): ${sigFigs(report.kappa)}${ciBracket(report.ci.kappa)}`);
     if (report.deflation !== null) {
       lines.push(
         `Δκ deflation: ${sigFigs(report.deflation)} (raw agreement overstates chance-corrected agreement by ${(report.deflation * 100).toFixed(1)} pp)`
@@ -166,6 +246,9 @@ export function renderMarkdownReport(report: CalibrationReport): string {
   lines.push(
     `CHANCE BASELINE (always-majority on this label distribution): ${percent(report.baseline.baselineAgreement)}`
   );
+  if (report.kappa !== null) {
+    lines.push(`LETTER GRADE: ${report.grade} — ${report.gradeLabel} (${GRADE_CONVENTION_COPY})`);
+  }
   lines.push("");
 
   const labels = report.confusion.labels;
@@ -205,10 +288,52 @@ export function renderMarkdownReport(report: CalibrationReport): string {
     lines.push("");
   }
 
+  if (report.kappaLinear !== null || report.kappaQuadratic !== null) {
+    lines.push("Weighted κ (secondary rows, 1 − D_o/D_e over sorted label ranks):");
+    lines.push(
+      `- linear ${
+        report.kappaLinear === null ? "undefined" : sigFigs(report.kappaLinear)
+      } · quadratic ${
+        report.kappaQuadratic === null ? "undefined" : sigFigs(report.kappaQuadratic)
+      } — these are secondary rows only; the headline, the grade and every CI stay on the unweighted κ`
+    );
+    lines.push("");
+  }
+
+  lines.push(
+    `Krippendorff's α (${report.alphaLevel}) — panel [judge, human1, …]: ${
+      report.alphaPanel === null
+        ? `undefined — ${report.alphaUndefinedReason ?? "not computable"}`
+        : sigFigs(report.alphaPanel)
+    }${report.ci.alpha ? ` [${sigFigs(report.ci.alpha.low)}, ${sigFigs(report.ci.alpha.high)}]` : ""} · human ceiling: ${
+      report.alphaHumans === null ? "undefined (needs ≥2 human raters)" : sigFigs(report.alphaHumans)
+    }`
+  );
+  lines.push(`α disclosure: ${ALPHA_VS_KAPPA_DISCLOSURE}`);
+  if (report.alphaWarning !== null) {
+    lines.push(`α warning: ${report.alphaWarning}`);
+  }
+  lines.push(`grade on α: ${ALPHA_KAPPA_BANDS_NOTE}`);
+  lines.push("");
+
+  const shown = report.disagreements.length;
+  const disagreements = report.disagreements.filter((row) => !row.agree);
+  lines.push(
+    `Disagreements: ${formatCount(disagreements.length)} of ${formatCount(report.n)} rows disagree (showing ${formatCount(shown)} of ${formatCount(report.n)})`
+  );
+  lines.push("");
+
   lines.push(report.receipt);
   lines.push("");
   lines.push(
-    "Krippendorff's α · bootstrap CIs · letter grade · ECE/Brier · bias panel · disagreement table: later milestones — typed seams, no fabricated values."
+    "Seeded, byte-reproducible percentiles · Krippendorff's α · letter grade · ECE/Brier · bias panel · LLM diagnosis: the later milestones land as typed seams, never fabricated values."
   );
   return lines.join("\n");
 }
+
+/** A CI bracket for inline use, or an empty string when there is no CI. */
+function ciBracket(ci: ConfidenceInterval | null): string {
+  if (ci === null) return "";
+  return ` [${sigFigs(ci.low)}, ${sigFigs(ci.high)}]`;
+}
+

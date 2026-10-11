@@ -235,6 +235,17 @@ export interface ComputeOptions {
    * ALWAYS the unweighted κ. D2 implements the weighted rows.
    */
   kappaWeights?: KappaWeights;
+  /**
+   * Krippendorff's α level (default nominal). D2 computes all three; the
+   * one-click selector UI lands in D3.
+   */
+  alphaLevel?: AlphaLevel;
+  /**
+   * Explicit rank order for ordinal α on non-numeric labels. Without it (and
+   * without numeric labels) ordinal α falls back to nominal with a warning —
+   * never a silent alphabetical order.
+   */
+  labelOrder?: string[];
   /** Parse-derived honesty: rowCount > MAX_ROWS was capped before analysis. */
   truncated?: boolean;
   /** Parse-derived: the true row total seen before the row cap. */
@@ -268,24 +279,25 @@ export interface CalibrationReport {
   multiclass: MulticlassMetrics | null;
   /** ★ UNWEIGHTED — the headline. */
   kappa: number | null;
-  /** D2 seam: labelled secondary rows, never the headline. */
+  /** Weighted SECONDARY rows — never the headline, grade or deflation. */
   kappaLinear: number | null;
   kappaQuadratic: number | null;
   /** Degenerate rater ⇒ null before either arithmetic path. */
   kappaUndefinedReason: string | null;
-  /** D2 seam. */
+  /** α over [judge, human1, human2, …] — the judge is a panel member. */
   alphaPanel: number | null;
   alphaHumans: number | null;
   alphaLevel: AlphaLevel;
   alphaUndefinedReason: string | null;
   alphaWarning: string | null;
+  /** The α replicate budget the tier rule applied (250 above 50k rows). */
   alphaReplicates: number | null;
   baseline: ChanceBaseline;
   /** accuracy − κ_unweighted (the Δκ headline figure). */
   deflation: number | null;
   /** accuracy − baselineAgreement. */
   liftOverBaseline: number | null;
-  /** D2 seam: seeded, reproducible percentile CIs. */
+  /** Seeded, byte-reproducible percentile CIs. */
   ci: {
     accuracy: ConfidenceInterval | null;
     kappa: ConfidenceInterval | null;
@@ -295,18 +307,24 @@ export interface CalibrationReport {
   calibration: CalibrationPanel | null;
   /** D3 seam: position / verbosity bias. */
   bias: BiasPanel;
-  /** D2 seam: the letter grade of the unweighted κ. */
+  /** Letter grade of the UNWEIGHTED κ (Landis–Koch, disclosed). */
   grade: string;
   gradeLabel: string;
-  /** D3 seam: the per-example disagreement rows. */
+  /**
+   * The per-example rows. The pure core fills ALL analyzed rows; the worker
+   * payload ships the first `MAX_TABLE_ROWS` as the display window (see
+   * `reportDisagreementWindow`), because the full set is never
+   * structured-cloned per dispatch — it is pulled on demand for export/LLM.
+   */
   disagreements: DisagreementRow[];
   /** Markdown: exact formula + inputs so a reviewer can recompute. */
   receipt: string;
   executionTimeMs: number;
-  /** D2 seam: the tier B actually used (0 until bootstrap lands). */
+  /** The tier B actually used — a pure function of the row count. */
   bootstrapReplicates: number;
+  /** The α replicate count the α CI really consumed (null if not computed). */
   alphaBootstrapReplicates: number | null;
-  /** D2 seam: true only when the cooperative deadline aborted the CIs. */
+  /** True only when the cooperative deadline aborted the CIs. */
   ciDropped: boolean;
   engine: ComputeEngine;
   truncated: boolean;

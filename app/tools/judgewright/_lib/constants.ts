@@ -119,3 +119,11 @@ export const DECLARED_ORIGINS: readonly string[] = [
 
 /** Copy shown by the status strip while the optional diagnosis stays idle. */
 export const AUTO_DIAGNOSIS_OFF_COPY = "auto-diagnosis off";
+
+/**
+ * M5/AC-18: the ≤25 diagnosis rows are ranked by confusion-cell frequency and
+ * drawn ROUND-ROBIN across distinct cells, so the diagnosis sees every pattern
+ * the judge got wrong instead of 25 copies of its single worst cell.
+ */
+export const DIAGNOSIS_SELECTION_COPY =
+  "the diagnosis rows are ranked by confusion-cell frequency and drawn round-robin across distinct cells (one per cell at a time, highest-frequency cell first; ties by example_id ascending)";

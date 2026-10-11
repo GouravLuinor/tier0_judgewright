@@ -400,16 +400,31 @@ export function bootstrapCI(
 // `out` is a scratch Float64Array the stat fills — no per-replicate allocation.
 // resampleMean stays a MODULE-PRIVATE fast path for the accuracy statistic only.
 
-export function bootstrapBundle(
-  rows: { judgeIdx: Int32Array; humanIdx: Int32Array },
-  stats: { accuracy?: StatFn; kappa?: StatFn; alpha?: StatFn },
-  opts: { seed: number; B: number; alphaB?: number; alpha?: number },
+export interface PanelCodes {           // encoded ONCE from the label pair arrays
+  judgeIdx: Int32Array;                 // class code of the judge label, per row
+  humanIdx: Int32Array;                 // class code of the FIRST human label, per row
+  pairCode: Int32Array;                 // humanIdx[i] * classes + judgeIdx[i]
+  labels: string[];                     // the sorted vocabulary — code ⇒ label
+  classes: number;
+}
+export function encodePanel(judge: string[], human: string[]): PanelCodes;
+
+export function bootstrapBundle(          // SHIPPED signature (D2)
+  rows: PanelCodes,
+  opts: { seed: number; B: number; alphaB?: number; alpha?: number;
+          alphaLevel?: AlphaLevel; alphaOrder?: string[];
+          deadlineAt?: number /* absolute Date.now() boundary */ },
 ): { accuracy: ConfidenceInterval | null; kappa: ConfidenceInterval | null;
      alpha: ConfidenceInterval | null; deadlineHit: boolean };
-// ONE shared resample loop per replicate: a single RNG stream and a single index array
-// update accuracy + κ + α together (never three independent draws). The report's
-// bootstrap phase calls only this. alphaB = the α-specific tier when §1.8 of PLAN
-// requires it (disclosed as alphaReplicates).
+// ONE shared resample loop per replicate: a single RNG stream (mulberry32, inlined) and
+// one fused draw+accumulate pass update accuracy + κ + α together (never three
+// independent draws), each statistic derived from the replicate's class-pair counts —
+// kappaFromPairCounts / alphaFromPairCounts — so a replicate never rebuilds labels.
+// The report's bootstrap phase calls only this. alphaB = the α-specific tier (250 above
+// 50,000 rows), disclosed as alphaReplicates (budget) and alphaBootstrapReplicates
+// (consumed). The deadline is an ABSOLUTE timestamp; a trip returns nulls only.
+// (`bootstrapCI(rows, stat, opts)` remains the reusable single-statistic form used by the
+// AC-49 property checks, with an identity-selection point statistic.)
 export function bootstrapTier(rowCount: number): number;             // deterministic B
 
 // _lib/calibration.ts

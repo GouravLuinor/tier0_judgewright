@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   KAPPA_UNDEFINED_COPY,
   cohensKappa,
+  kappaFromPairCounts,
   kappaReceiptInputs,
   kappaUndefinedReason,
 } from "../cohensKappa";
@@ -129,17 +130,86 @@ describe("kappaReceiptInputs — the recompute-by-hand inputs", () => {
   });
 });
 
-describe("cohensKappa — the weights seam", () => {
+describe("cohensKappa — the weighted secondary rows (AC-05)", () => {
+  /** Reference tolerance: external references are asserted to ±1e-12 (SPEC §6). */
+  const TOL = 1e-12;
+
   it("takes the integer fast path for the default (unweighted) case", () => {
     const human = ["a", "b", "a", "b"];
     const judge = ["a", "b", "b", "a"];
     expect(cohensKappa(judge, human)).toBe(cohensKappa(judge, human, "unweighted"));
   });
 
-  it("returns null for weighted variants until the D2 rows land (never a wrong number)", () => {
-    const human = ["a", "b", "a", "b"];
-    const judge = ["a", "b", "b", "a"];
+  it("the AC-04 data gives linear 0.5 and quadratic 0.545454545454545", () => {
+    const human = ["2", "0", "2", "2", "0", "1"];
+    const judge = ["0", "0", "2", "2", "0", "2"];
+    expect(Math.abs((cohensKappa(judge, human, "linear") as number) - 0.5)).toBeLessThanOrEqual(TOL);
+    expect(
+      Math.abs((cohensKappa(judge, human, "quadratic") as number) - 0.545454545454545)
+    ).toBeLessThanOrEqual(TOL);
+  });
+
+  it("the 3-class fixture [[3,1,0],[1,2,0],[0,0,3]] gives the pinned weighted pair", () => {
+    const matrix = [
+      [3, 1, 0],
+      [1, 2, 0],
+      [0, 0, 3],
+    ];
+    const human: string[] = [];
+    const judge: string[] = [];
+    for (let h = 0; h < 3; h++) {
+      for (let j = 0; j < 3; j++) {
+        const cell = (matrix[h] as number[])[j] as number;
+        for (let count = 0; count < cell; count++) {
+          human.push(String(h));
+          judge.push(String(j));
+        }
+      }
+    }
+    expect(Math.abs((cohensKappa(judge, human) as number) - 0.696969696969697)).toBeLessThanOrEqual(TOL);
+    expect(
+      Math.abs((cohensKappa(judge, human, "linear") as number) - 0.7777777777777778)
+    ).toBeLessThanOrEqual(TOL);
+    expect(
+      Math.abs((cohensKappa(judge, human, "quadratic") as number) - 0.855072463768116)
+    ).toBeLessThanOrEqual(TOL);
+  });
+
+  it("shares the single degenerate guard with the unweighted case", () => {
+    const human = ["PASS", "PASS", "PASS"];
+    const judge = ["PASS", "FAIL", "PASS"];
     expect(cohensKappa(judge, human, "linear")).toBeNull();
     expect(cohensKappa(judge, human, "quadratic")).toBeNull();
+    expect(cohensKappa([], [], "linear")).toBeNull();
+  });
+
+  it("reduces to the unweighted coefficient on a binary panel", () => {
+    // With two classes every off-diagonal gap is exactly one rank, so
+    // |i−j| = (i−j)² = 1 and both weighted forms collapse onto the unweighted
+    // coefficient — the α side of the same fact (AC-08).
+    const human = ["a", "a", "b", "b", "a", "b", "b", "a"];
+    const judge = ["a", "b", "b", "a", "a", "a", "b", "b"];
+    const unweighted = cohensKappa(judge, human);
+    expect(unweighted).not.toBeNull();
+    expect(cohensKappa(judge, human, "linear")).toBe(unweighted);
+    expect(cohensKappa(judge, human, "quadratic")).toBe(unweighted);
+  });
+});
+
+describe("kappaFromPairCounts — the matrix form (the bootstrap contract)", () => {
+  it("matches the string form bit-for-bit on the same data", () => {
+    const human = ["a", "a", "b", "b", "c", "c", "c"];
+    const judge = ["a", "b", "b", "b", "c", "a", "c"];
+    const labels = ["a", "b", "c"];
+    const counts = new Int32Array(9);
+    for (let i = 0; i < human.length; i++) {
+      counts[labels.indexOf(human[i] as string) * 3 + labels.indexOf(judge[i] as string)] += 1;
+    }
+    expect(kappaFromPairCounts(counts, 3)).toBe(cohensKappa(judge, human));
+  });
+
+  it("applies the same degenerate guard: a constant rater is null", () => {
+    const counts = new Int32Array([3, 0, 0, 0]);
+    expect(kappaFromPairCounts(counts, 2)).toBeNull();
   });
 });

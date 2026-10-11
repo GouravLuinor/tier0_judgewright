@@ -1,8 +1,9 @@
 /// <reference lib="webworker" />
 
-import { analyzeVerdicts } from "../_lib/analyze";
+import { analyzeVerdicts, reportDisagreementWindow } from "../_lib/analyze";
 import {
   ARTIFACT_CACHE_CAPACITY,
+  MAX_TABLE_ROWS,
   WORKER_DEADLINE_MS,
 } from "../_lib/constants";
 import type {
@@ -23,10 +24,24 @@ import type {
  *
  * The LRU below is the artifact seam: entries are keyed by a CONTENT hash,
  * refreshed on hit, capped at ARTIFACT_CACHE_CAPACITY, and only error-free
- * results are cached.
+ * results are cached — with the disagreement DISPLAY WINDOW, never the full
+ * row set, so a 200k-row dispatch caches (and posts) a summary.
  */
 
 const artifactCache = new Map<string, VerdictAnalysis>();
+
+/**
+ * The payload form of a settled analysis: the full report with its
+ * disagreement rows replaced by the first `MAX_TABLE_ROWS` (the display
+ * window). `report.n`, the receipt and every point statistic are untouched —
+ * only the per-example table is windowed, and the true total rides alongside.
+ */
+function windowedStats(stats: VerdictAnalysis): VerdictAnalysis {
+  return {
+    ...stats,
+    report: reportDisagreementWindow(stats.report, 0, MAX_TABLE_ROWS),
+  };
+}
 
 /**
  * FNV-1a over the actual payload (content, not lengths — two different pastes
@@ -84,40 +99,40 @@ self.onmessage = (event: MessageEvent<WorkerInputPayload>) => {
           confidenceLevel: settings.confidenceLevel,
         });
 
-    if (result.ok && !cached) {
-      setCachedArtifacts(key, result.stats);
+    if (result.ok) {
+      // AC-16/AC-59: the payload carries the summary plus the first
+      // MAX_TABLE_ROWS per-example rows, and the true totalCount names what it
+      // does not show. The cache stores the same windowed form, so a cache hit
+      // never grows the transferred payload.
+      const windowed = windowedStats(result.stats);
+      if (!cached) setCachedArtifacts(key, windowed);
+      self.postMessage({
+        id,
+        ok: true,
+        error: null,
+        degraded: false,
+        stats: windowed,
+        issues: windowed.parse.issues,
+        issueCount: windowed.parse.issueCount,
+        disagreementWindow: {
+          offset: 0,
+          rows: windowed.report.disagreements,
+          totalCount: result.stats.report.n,
+        },
+      } satisfies WorkerOutputPayload);
+      return;
     }
 
-    const payload: WorkerOutputPayload = result.ok
-      ? {
-          id,
-          ok: true,
-          error: null,
-          degraded: false,
-          stats: result.stats,
-          issues: result.stats.parse.issues,
-          issueCount: result.stats.parse.issueCount,
-          // D3 seam: the display window. `rows` stays empty until the table
-          // milestone; the count is already honest.
-          disagreementWindow: {
-            offset: 0,
-            rows: [],
-            totalCount:
-              result.stats.report.n - result.stats.report.agreementRows,
-          },
-        }
-      : {
-          id,
-          ok: false,
-          error: result.error,
-          degraded: false,
-          stats: null,
-          issues: result.issues,
-          issueCount: result.issueCount,
-          disagreementWindow: { offset: 0, rows: [], totalCount: 0 },
-        };
-
-    self.postMessage(payload);
+    self.postMessage({
+      id,
+      ok: false,
+      error: result.error,
+      degraded: false,
+      stats: null,
+      issues: result.issues,
+      issueCount: result.issueCount,
+      disagreementWindow: { offset: 0, rows: [], totalCount: 0 },
+    } satisfies WorkerOutputPayload);
   } catch (err) {
     // Last-resort envelope (BAR §4.4): a friendly value, never a raw stack.
     self.postMessage({

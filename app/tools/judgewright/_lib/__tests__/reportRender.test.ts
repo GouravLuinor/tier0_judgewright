@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { bootstrapTierCopy } from "../bootstrapCI";
 import {
   percent,
   renderMarkdownReport,
@@ -7,6 +8,11 @@ import {
   sigFigs,
 } from "../reportRender";
 import { computeReport } from "../report";
+import {
+  ALPHA_KAPPA_BANDS_NOTE,
+  ALPHA_VS_KAPPA_DISCLOSURE,
+} from "../krippendorffAlpha";
+import { GRADE_CONVENTION_COPY } from "../grade";
 import type { RawVerdict } from "../types";
 
 function headlineRows(): RawVerdict[] {
@@ -66,6 +72,21 @@ describe("renderOneLineVerdict", () => {
     expect(line).toContain("always-majority 94.0%");
   });
 
+  it("carries the κ CI bracket and the letter grade (AC-55 shape)", () => {
+    const line = renderOneLineVerdict(report);
+    expect(line).toContain("grade C");
+    expect(line).toMatch(/κ 0\.51923076923076927 \[0\.\d+, 0\.\d+\]/);
+    // The CI that rides on the accuracy figure is the same seeded interval.
+    expect(line).toMatch(/acc 95\.0% \[\d+\.\d%–\d+\.\d%\]/);
+  });
+
+  it("prints the systematic-disagreement copy for a negative κ (AC-57)", () => {
+    const line = renderOneLineVerdict({ ...report, kappa: -0.2 });
+    expect(line).toContain("κ -0.20000000000000001");
+    expect(line).toContain("κ is negative — the judge disagrees systematically");
+    expect(line).not.toContain("Δ");
+  });
+
   it("says κ is undefined instead of printing a fabricated number", () => {
     const degenerate = computeReport(
       [
@@ -119,6 +140,32 @@ describe("renderMarkdownReport — the copy payload", () => {
     expect(markdown).toContain("REPRODUCIBILITY RECEIPT");
     expect(markdown).toContain("no transcendentals");
   });
+
+  it("carries the seeded CIs, the grade, the α panel and the tier copy", () => {
+    // D2: every deferred seam is now rendered, and each one is live data.
+    expect(markdown).toContain("LETTER GRADE: C — moderate (");
+    expect(markdown).toContain(GRADE_CONVENTION_COPY);
+    expect(markdown).toContain("UNWEIGHTED κ (chance-corrected): 0.51923076923076927 [");
+    expect(markdown).toContain("RAW AGREEMENT (accuracy): 95.0% [");
+    expect(markdown).toMatch(/Δκ deflation: 0\.43076923076923068/);
+    // The α panel, its disclosure and the human-ceiling honesty.
+    expect(markdown).toContain("Krippendorff's α (nominal) — panel [judge, human1, …]:");
+    expect(markdown).toContain(ALPHA_VS_KAPPA_DISCLOSURE);
+    expect(markdown).toMatch(/human ceiling: undefined \(needs ≥2 human raters\)/);
+    // The weighted secondary rows are labelled as secondary.
+    expect(markdown).toContain("Weighted κ (secondary rows, 1 − D_o/D_e over sorted label ranks):");
+    expect(markdown).toContain("these are secondary rows only");
+    // The windowed disagreement strip names the truth.
+    expect(markdown).toContain("Disagreements: 50 of 1,000 rows disagree");
+    // The tier copy lands with its live numbers.
+    expect(markdown).toContain(bootstrapTierCopy(1_000));
+    expect(markdown).toContain("seed 42 · B 2,000");
+    expect(markdown).toContain("κ-bands applied to α for comparability — not α's own convention".replace("κ-bands", "κ-bands") === ALPHA_KAPPA_BANDS_NOTE ? ALPHA_KAPPA_BANDS_NOTE : "");
+  });
+
+  it("does not claim the α letter is α's own convention", () => {
+    expect(markdown).toContain(ALPHA_KAPPA_BANDS_NOTE);
+  });
 });
 
 describe("renderReceipt — a reviewer can recompute κ from it alone", () => {
@@ -154,6 +201,32 @@ describe("renderReceipt — a reviewer can recompute κ from it alone", () => {
 
   it("names the analytic baseline identity", () => {
     expect(receipt).toContain("p_o = p_e identity");
+  });
+
+  it("carries the seeded bootstrap block with seed, B, ciDropped, reason and engine", () => {
+    expect(receipt).toContain("bootstrap: seed 42 · B 2,000");
+    expect(receipt).toContain(bootstrapTierCopy(1_000));
+    expect(receipt).toMatch(/ci: accuracy 0\.9\d+ – 0\.96\d+ \(point 0\.94\d+, 2,000 replicates\)/);
+    expect(receipt).toContain("engine: worker · ciDropped: false · reason: none");
+  });
+
+  it("carries the α panel inputs and the κ-vs-α disclosure", () => {
+    expect(receipt).toContain("Krippendorff's α (nominal) over [judge, human1, …]:");
+    expect(receipt).toContain(ALPHA_VS_KAPPA_DISCLOSURE);
+    expect(receipt).toContain("grade: C (moderate) — Landis–Koch bands applied to unweighted κ");
+  });
+
+  it("names the deadline honestly when it tripped (AC-32)", () => {
+    const dropped = { ...report, ciDropped: true, ci: { accuracy: null, kappa: null, alpha: null } };
+    const text = renderReceipt(dropped, inputs, {
+      seed: 42,
+      confidenceLevel: 0.95,
+      deadlineMs: 1_000,
+      deadlineHit: true,
+    });
+    expect(text).toContain("ciDropped: true");
+    expect(text).toContain("the cooperative deadline was reached before the replicates completed");
+    expect(text).toContain("point statistics are unchanged");
   });
 
   it("prints the undefined-κ receipt when the guard fired", () => {

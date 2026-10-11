@@ -1,27 +1,43 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Activity, Microscope, TriangleAlert } from "lucide-react";
 import { copyTextToClipboard } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
+import { MAX_TABLE_ROWS } from "../_lib/constants";
+import { bootstrapTierCopy } from "../_lib/bootstrapCI";
+import {
+  ALPHA_CEILING_NEEDS_RATERS,
+  ALPHA_KAPPA_BANDS_NOTE,
+  ALPHA_VS_KAPPA_DISCLOSURE,
+} from "../_lib/krippendorffAlpha";
+import {
+  GRADE_CONVENTION_COPY,
+  GRADE_NEGATIVE_LABEL,
+  NEGATIVE_KAPPA_COPY,
+  letterGrade,
+} from "../_lib/grade";
 import {
   percent,
   renderMarkdownReport,
   sigFigs,
 } from "../_lib/reportRender";
 import { useToolStore } from "../_store/useToolStore";
+import type { CalibrationReport } from "../_lib/types";
 
 /**
  * The report pane: five states, one report card.
  *
- * READY renders the D1 calibration headline — raw agreement, accuracy, the
- * UNWEIGHTED κ (chance-corrected), the always-majority chance baseline, the
- * deflation between them, the confusion-matrix heat table, the binary /
- * k-class metrics and the reproducibility receipt (formula + inputs, so a
- * reviewer can recompute κ). Krippendorff's α, the bootstrap CIs, ECE/Brier,
- * the letter grade, the bias panel and the disagreement table are typed seams
- * of later milestones and are named as such rather than faked.
+ * READY renders the D2 calibration headline — raw agreement, accuracy, the
+ * UNWEIGHTED κ with its seeded CI, the Δκ deflation, the letter grade (with its
+ * Landis–Koch disclosed as a convention), the always-majority chance baseline,
+ * the confusion-matrix heat table, the α panel (panel + human ceiling + the
+ * mandatory κ-vs-α disclosure), the weighted κ secondary rows, the binary /
+ * k-class metrics, the windowed disagreement table and the reproducibility
+ * receipt (formula + inputs, so a reviewer can recompute κ). ECE/Brier, the
+ * bias panel and the LLM diagnosis are typed seams of the next milestone and
+ * are named as such rather than faked.
  */
 export function ReportPane() {
   const stats = useToolStore((s) => s.stats);
@@ -229,13 +245,19 @@ function ReportCard({
         <HeadlineStat
           label="raw agreement"
           value={percent(report.rawAgreement)}
-          sub={`${report.agreementRows.toLocaleString("en-US")} of ${report.n.toLocaleString("en-US")} rows agree exactly`}
+          sub={report.ci.accuracy
+            ? `${report.agreementRows.toLocaleString("en-US")} of ${report.n.toLocaleString("en-US")} rows agree exactly · 95% CI ${percent(report.ci.accuracy.low)}–${percent(report.ci.accuracy.high)}`
+            : `${report.agreementRows.toLocaleString("en-US")} of ${report.n.toLocaleString("en-US")} rows agree exactly`}
           dataStat="agreement"
         />
         <HeadlineStat
           label="accuracy"
           value={percent(report.accuracy)}
-          sub="the same exact-match figure under its metric name"
+          sub={
+            report.ci.accuracy
+              ? `the same exact-match figure under its metric name — one statistic, one interval: ${percent(report.ci.accuracy.low)}–${percent(report.ci.accuracy.high)}`
+              : "the same exact-match figure under its metric name"
+          }
           dataStat="accuracy"
         />
         {report.kappa === null ? (
@@ -256,10 +278,52 @@ function ReportCard({
           <HeadlineStat
             label="unweighted κ"
             value={sigFigs(report.kappa)}
-            sub="chance-corrected — the headline figure"
+            sub={
+              report.kappa < 0
+                ? NEGATIVE_KAPPA_COPY
+                : report.ci.kappa
+                  ? `chance-corrected — the headline figure, 95% CI ${sigFigs(report.ci.kappa.low)} to ${sigFigs(report.ci.kappa.high)}`
+                  : "chance-corrected — the headline figure (no CI)"
+            }
             accent
             dataStat="kappa"
+            dataCi={report.ci.kappa ? "kappa" : undefined}
           />
+        )}
+        {report.kappa === null ? (
+          <div
+            className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3"
+            data-grade="undefined"
+          >
+            <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+              letter grade
+            </dt>
+            <dd className="mt-1 font-mono text-lg font-semibold text-zinc-500">
+              {report.grade}
+            </dd>
+            <dd className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+              no coefficient, no grade
+            </dd>
+          </div>
+        ) : (
+          <div
+            className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3"
+            data-grade={report.grade}
+            data-grade-label={report.gradeLabel}
+          >
+            <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+              letter grade
+            </dt>
+            <dd className="mt-1 font-mono text-lg font-semibold text-brand-lime">
+              {report.grade}
+            </dd>
+            <dd className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+              {report.gradeLabel === GRADE_NEGATIVE_LABEL
+                ? GRADE_NEGATIVE_LABEL
+                : report.gradeLabel}{" "}
+              — {GRADE_CONVENTION_COPY}
+            </dd>
+          </div>
         )}
         <HeadlineStat
           label="chance baseline"
@@ -277,16 +341,31 @@ function ReportCard({
           className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3 text-xs leading-relaxed text-zinc-300"
           data-deflation
         >
-          <span className="font-mono text-brand-lime">
-            Δκ = {sigFigs(report.deflation)}
-          </span>{" "}
-          — raw agreement {percent(report.rawAgreement)} overstates the
-          chance-corrected κ by {(report.deflation * 100).toFixed(1)} pp, and
-          the judge sits{" "}
-          <span className="font-mono">
-            {(report.liftOverBaseline * 100).toFixed(1)} pp
-          </span>{" "}
-          above the always-majority baseline.
+          {report.kappa < 0 ? (
+            <>
+              <span className="font-mono text-brand-rose">
+                Δκ = {sigFigs(report.deflation)}
+              </span>{" "}
+              — raw agreement {percent(report.rawAgreement)} and κ{" "}
+              <span className="font-mono">{sigFigs(report.kappa)}</span> are
+              printed together; κ is negative, so the pp figures below do not
+              describe a flattering judge.{" "}
+              <span className="text-brand-rose">{NEGATIVE_KAPPA_COPY}.</span>
+            </>
+          ) : (
+            <>
+              <span className="font-mono text-brand-lime">
+                Δκ = {sigFigs(report.deflation)}
+              </span>{" "}
+              — raw agreement {percent(report.rawAgreement)} overstates the
+              chance-corrected κ by {(report.deflation * 100).toFixed(1)} pp, and
+              the judge sits{" "}
+              <span className="font-mono">
+                {(report.liftOverBaseline * 100).toFixed(1)} pp
+              </span>{" "}
+              above the always-majority baseline.
+            </>
+          )}
         </p>
       )}
 
@@ -359,6 +438,129 @@ function ReportCard({
           </tfoot>
         </table>
       </div>
+
+      {/* ── Krippendorff's α panel ────────────────────────────────────────── */}
+      <section
+        aria-label="Krippendorff alpha panel"
+        data-alpha-panel={report.alphaLevel}
+        className="space-y-2 rounded-lg border border-surface-border bg-surface-subtle/30 p-3"
+      >
+        <h4 className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+          krippendorff&rsquo;s α — level &quot;{report.alphaLevel}&quot;, judge
+          as a panel member
+        </h4>
+        <dl className="grid grid-cols-2 gap-3">
+          <div>
+            <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+              α (panel)
+            </dt>
+            <dd
+              className="mt-0.5 font-mono text-base font-semibold text-zinc-100"
+              data-alpha-panel-value
+            >
+              {report.alphaPanel === null ? "—" : sigFigs(report.alphaPanel)}
+            </dd>
+            <dd className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">
+              {report.alphaPanel === null
+                ? (report.alphaUndefinedReason ?? "not computable on this input")
+                : report.ci.alpha
+                  ? `95% CI ${sigFigs(report.ci.alpha.low)} to ${sigFigs(report.ci.alpha.high)} · ${report.alphaReplicates?.toLocaleString("en-US") ?? "—"} replicates, seeded`
+                  : "no CI — the budget was reached (point statistic unaffected)"}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+              α (human ceiling)
+            </dt>
+            <dd
+              className="mt-0.5 font-mono text-base font-semibold text-zinc-100"
+              data-alpha-humans-value
+            >
+              {report.alphaHumans === null ? "—" : sigFigs(report.alphaHumans)}
+            </dd>
+            <dd className="mt-0.5 text-[10px] leading-relaxed text-zinc-500">
+              {report.alphaHumans === null ? ALPHA_CEILING_NEEDS_RATERS : "humans only, judge excluded — the ceiling a single judge cannot be compared past"}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          {ALPHA_VS_KAPPA_DISCLOSURE}
+          {report.alphaWarning !== null && (
+            <>
+              <br />
+              <span className="text-brand-amber">{report.alphaWarning}.</span>
+            </>
+          )}
+          {report.kappa !== null && (
+            <>
+              <br />
+              <span className="text-zinc-500">
+                grade on α: {report.alphaPanel === null ? "—" : letterGrade(report.alphaPanel)}{" "}
+                — {ALPHA_KAPPA_BANDS_NOTE}.
+              </span>
+            </>
+          )}
+        </p>
+      </section>
+
+      {/* ── Weighted κ: labelled secondary rows ───────────────────────────── */}
+      {(report.kappaLinear !== null || report.kappaQuadratic !== null) && (
+        <div
+          className="rounded-lg border border-surface-border bg-surface-subtle/30 p-3"
+          data-weighted-kappa
+        >
+          <h4 className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+            weighted κ — secondary rows (1 − D_o/D_e over sorted label ranks)
+          </h4>
+          <dl className="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <dt className="font-mono text-[10px] uppercase text-zinc-500">
+                linear
+              </dt>
+              <dd className="mt-0.5 font-mono text-sm font-semibold text-zinc-100">
+                {report.kappaLinear === null ? "—" : sigFigs(report.kappaLinear)}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-mono text-[10px] uppercase text-zinc-500">
+                quadratic
+              </dt>
+              <dd className="mt-0.5 font-mono text-sm font-semibold text-zinc-100">
+                {report.kappaQuadratic === null ? "—" : sigFigs(report.kappaQuadratic)}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+            secondary rows only — the headline, the grade, the Δκ deflation and
+            every CI stay on the UNWEIGHTED κ.
+          </p>
+        </div>
+      )}
+
+      {/* ── CI provenance: the tier copy, verbatim ─────────────────────────── */}
+      {report.ci.accuracy !== null && (
+        <p
+          className="rounded-lg border border-surface-border bg-surface-subtle/30 p-3 font-mono text-[10px] leading-relaxed text-zinc-400"
+          data-bootstrap-tier
+        >
+          {bootstrapTierCopy(report.n)} · seed {report.ci.accuracy.seed} ·
+          percentile CIs, index-resampled — byte-identical for the same seed.
+        </p>
+      )}
+      {report.ciDropped && (
+        <p
+          className="rounded-lg border border-brand-amber/40 bg-brand-amber/10 p-3 text-xs leading-relaxed text-brand-amber"
+          data-ci-dropped
+          role="status"
+        >
+          Bootstrap CIs omitted — the cooperative deadline was reached. Point
+          statistics, the chance baseline and B are unchanged; re-run for the
+          intervals.
+        </p>
+      )}
+
+      {/* ── Disagreement table (windowed) ─────────────────────────────────── */}
+      <DisagreementTable report={report} />
 
       {/* ── Metrics ──────────────────────────────────────────────────────── */}
       {report.binaryMetrics && (
@@ -439,9 +641,8 @@ function ReportCard({
 
       {/* ── Deferred milestones: typed seams, named not faked ────────────── */}
       <p className="font-mono text-[10px] leading-relaxed text-zinc-500">
-        Krippendorff&rsquo;s α · bootstrap CIs · letter grade · ECE/Brier · bias
-        panel · disagreement table — later milestones; typed seams, no
-        fabricated values.
+        ECE/Brier calibration · position &amp; verbosity bias panel · LLM
+        diagnosis — later milestones; typed seams, no fabricated values.
       </p>
     </section>
   );
@@ -469,17 +670,21 @@ function HeadlineStat({
   sub,
   accent = false,
   dataStat,
+  dataCi,
 }: {
   label: string;
   value: string;
   sub: string;
   accent?: boolean;
   dataStat: string;
+  /** Marks the statistic whose interval is on screen (e2e reads it). */
+  dataCi?: string;
 }) {
   return (
     <div
       className="rounded-lg border border-surface-border bg-surface-subtle/40 p-3"
       data-stat={dataStat}
+      data-ci={dataCi}
     >
       <dt className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
         {label}
@@ -562,3 +767,96 @@ function heatTone(cell: number, isDiagonal: boolean, max: number): string {
       ? "bg-brand-rose/20 text-zinc-100"
       : "bg-brand-rose/10 text-zinc-100";
 }
+
+/**
+ * The windowed disagreement table. The worker posts at most MAX_TABLE_ROWS
+ * rows, and the strip under the header names the truth ("showing X of Y")
+ * instead of implying it rendered everything (AC-16). A "disagreements only"
+ * filter keeps the noise down without hiding what the judge got wrong, and 5,000
+ * rows stay a layout win because the window never exceeds the copy cap.
+ */
+function DisagreementTable({ report }: { report: CalibrationReport }) {
+  const window = useToolStore((s) => s.disagreementWindow);
+  const rows = window?.rows ?? report.disagreements;
+  const totalRows = window?.totalCount ?? report.n;
+  const [disagreementsOnly, setDisagreementsOnly] = useState(false);
+
+  const visible = disagreementsOnly ? rows.filter((row) => !row.agree) : rows;
+  const disagreementsHidden = rows.filter((row) => !row.agree).length;
+
+  return (
+    <section
+      aria-label="Disagreement table"
+      className="rounded-lg border border-surface-border bg-surface-subtle/30 p-3"
+      data-disagreement-table
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="font-mono text-[10px] uppercase tracking-wider text-zinc-400">
+          per-example rows — disagreements flagged
+        </h4>
+        <label className="ml-auto inline-flex items-center gap-1.5 text-[10px] text-zinc-400">
+          <input
+            type="checkbox"
+            className="h-3 w-3 accent-brand-lime"
+            checked={disagreementsOnly}
+            onChange={(event) => setDisagreementsOnly(event.target.checked)}
+          />
+          disagreements only
+        </label>
+      </div>
+      <p
+        className="mt-1 font-mono text-[10px] text-zinc-500"
+        data-disagreement-strip
+      >
+        {disagreementsOnly
+          ? `${visible.length.toLocaleString("en-US")} of ${disagreementsHidden.toLocaleString("en-US")} shown disagreements in this window`
+          : `showing ${visible.length.toLocaleString("en-US")} of ${totalRows.toLocaleString("en-US")} rows — the table caps at ${MAX_TABLE_ROWS.toLocaleString("en-US")}; the full set is pulled on demand for export and diagnosis`}
+      </p>
+      <div className="mt-2 max-h-72 overflow-y-auto">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              {["line", "example_id", "human", "judge", "verdict"].map((head) => (
+                <th
+                  key={head}
+                  className="border border-surface-border px-2 py-1 text-left font-mono text-[10px] text-zinc-400"
+                >
+                  {head}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr
+                key={`${row.lineNumber}-${row.exampleId}`}
+                data-agree={row.agree ? "true" : "false"}
+                className={row.agree ? "text-zinc-300" : "text-brand-amber"}
+              >
+                <td className="border border-surface-border px-2 py-1 font-mono tabular-nums text-zinc-500">
+                  {row.lineNumber}
+                </td>
+                <td className="border border-surface-border px-2 py-1 font-mono">
+                  {row.exampleId}
+                </td>
+                <td className="border border-surface-border px-2 py-1 font-mono">
+                  {row.humanLabels.length > 1
+                    ? `${row.humanLabel} (+${row.humanLabels.length - 1})`
+                    : row.humanLabel}
+                </td>
+                <td className="border border-surface-border px-2 py-1 font-mono">
+                  {row.judgeLabel}
+                </td>
+                <td className="border border-surface-border px-2 py-1 font-mono">
+                  {row.agree ? "agree" : "DISAGREE"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+

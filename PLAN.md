@@ -160,20 +160,24 @@ tripped deadlines. This section is the protocol **and** the record.
    50,000 and disclose `alphaReplicates` in the report and the CI panel. The tier never
    changes silently; a smaller dataset still shows `B = 2,000` (`AC-53`).
 
-| Tier (row count) | B (from `bootstrapTier`) | α budget share | **Measured ms (record here)** |
+| Tier (row count) | B (from `bootstrapTier`) | α budget share | **Measured ms (D2, recorded)** |
 |---|---:|---:|---:|
-| ≤ 50,000 | 2,000 | ≤ 250 ms | *measure and record before M2 exit* |
-| ≤ 100,000 | 1,000 | ≤ 300 ms | *measure and record before M2 exit* |
-| ≤ 150,000 | 500 | ≤ 350 ms | *measure and record before M2 exit* |
-| ≤ 200,000 | 500 | ≤ 400 ms | *measure and record before M2 exit* |
+| ≤ 50,000 | 2,000 | ≤ 250 ms | **+4 ms for α** (acc+κ 330 ms → +α 334 ms) |
+| ≤ 100,000 | 1,000 | ≤ 300 ms | **−19 ms for α** (403 ms → 384 ms; noise) |
+| ≤ 150,000 | 500 | ≤ 350 ms | **−4 ms for α** (267 ms → 263 ms; noise) |
+| ≤ 200,000 | 500 | ≤ 400 ms | **+6 ms for α** (351 ms → 357 ms) |
 
-*Estimate (not a measurement):* κ at 200k/B=500 cost 356 ms (§1.6); α adds an
-`O(n·(m−1))` coincidence-matrix rebuild per replicate over the same selection, so the shared
-loop is expected at roughly 1.3–1.8× the κ loop (≈ 460–640 ms) — inside the budget, but far
-too close to ship on an estimate. `AC-61` asserts the **measured** run is inside the deadline
-at 200k with the tier B, with the documented escape hatch: on a machine ≥ 2.5× slower than
-the reference the FM-7 abort may drop CIs (disclosed in the receipt; no number ever changes
-to fit the clock).
+**Measured, not estimated (D2):** α rides the shared loop and costs ≤ 6 ms at every tier
+(≤ 0.5% of the 1,000 ms worker budget) — it re-derives `D_o`/`D_e` from the replicate's
+class-pair counts, so it never rebuilds the coincidence matrix. The `min(B, 250)` rule above
+50,000 rows is therefore a **disclosed tier rule**, not a deadline-driven necessity, and the
+report names it (`alphaReplicates` in the CI panel, the receipt and the tier copy). The
+fused draw+accumulate pass keeps accuracy+κ at 351 ms for 200,000 rows / B = 500, against the
+§1.6 estimate of 356 ms. Full worker dispatch (parse + report + all three CIs): 528 ms at
+50k, 893 ms at 100k, 894 ms at 150k, 1,280 ms at 200k — inside the 1,500 ms watchdog and
+inside the 1,000 ms cooperative budget at ≤ 150k rows, so the FM-7 abort (CIs dropped, point
+statistics and `B` unchanged) is the escape hatch on a ≥ 2.5× slower machine. `AC-61` asserts
+exactly that: no number ever changes to fit the clock. Commands: `BENCHMARKS.md`.
 
 ---
 

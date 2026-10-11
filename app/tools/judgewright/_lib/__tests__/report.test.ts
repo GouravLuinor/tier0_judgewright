@@ -107,25 +107,53 @@ describe("computeReport — the AC-10 headline fixture", () => {
   });
 });
 
-describe("computeReport — the deferred seams are typed, not fake", () => {
+describe("computeReport — the D2 seams are filled, the D3 ones stay typed", () => {
   const report = computeReport(headlineFixture(), DEFAULT_OPTIONS);
 
-  it("leaves α, the CIs, ECE/Brier, the grade and the bias panel unfilled", () => {
-    expect(report.alphaPanel).toBeNull();
-    expect(report.alphaHumans).toBeNull();
-    expect(report.alphaReplicates).toBeNull();
-    expect(report.ci.accuracy).toBeNull();
-    expect(report.ci.kappa).toBeNull();
-    expect(report.ci.alpha).toBeNull();
+  it("fills α, the CIs, the grade and the disagreement rows", () => {
+    expect(report.alphaPanel).not.toBeNull();
+    expect(report.ci.accuracy).not.toBeNull();
+    expect(report.ci.kappa).not.toBeNull();
+    expect(report.ci.alpha).not.toBeNull();
+    expect(report.grade).not.toBe("—");
+    expect(report.kappaLinear).not.toBeNull();
+    expect(report.kappaQuadratic).not.toBeNull();
+    expect(report.disagreements).toHaveLength(1000);
+    expect(report.bootstrapReplicates).toBe(2000); // the ≤50k tier
+    expect(report.ciDropped).toBe(false);
+  });
+
+  it("still leaves the D3 panels as typed seams — never fabricated", () => {
     expect(report.calibration).toBeNull();
-    expect(report.grade).toBe("—");
     expect(report.bias.computable).toBe(false);
     expect(report.bias.note).toContain("Not computable from your input");
-    expect(report.kappaLinear).toBeNull();
-    expect(report.kappaQuadratic).toBeNull();
-    expect(report.disagreements).toEqual([]);
-    expect(report.bootstrapReplicates).toBe(0);
-    expect(report.ciDropped).toBe(false);
+  });
+
+  it("computes the human ceiling as null with one human rater (AC-34)", () => {
+    expect(report.alphaHumans).toBeNull();
+    expect(report.alphaWarning).toBeNull();
+  });
+});
+
+describe("computeReport — the CIs are contract-complete (AC-52)", () => {
+  const report = computeReport(headlineFixture(), DEFAULT_OPTIONS);
+
+  it("every CI carries point, low, high, replicates and seed", () => {
+    for (const ci of [report.ci.accuracy, report.ci.kappa, report.ci.alpha]) {
+      expect(ci).not.toBeNull();
+      if (ci === null) return;
+      expect(ci.point).toBeGreaterThan(0);
+      expect(ci.low).toBeLessThanOrEqual(ci.point);
+      expect(ci.high).toBeGreaterThanOrEqual(ci.point);
+      expect(ci.replicates).toBe(2000);
+      expect(ci.seed).toBe(42);
+    }
+  });
+
+  it("the point statistic of each CI is the report's own point statistic", () => {
+    expect(report.ci.accuracy?.point).toBe(report.accuracy);
+    expect(report.ci.kappa?.point).toBe(report.kappa);
+    expect(report.ci.alpha?.point).toBe(report.alphaPanel);
   });
 });
 
@@ -148,9 +176,15 @@ describe("computeReport — form-agnostic statistics (AC-28)", () => {
     const fromJsonl = computeReport(parseVerdicts(jsonl).verdicts, DEFAULT_OPTIONS);
     const fromCsv = computeReport(parseVerdicts(csv).verdicts, DEFAULT_OPTIONS);
 
-    // Compare everything except the wall-clock field.
-    const { executionTimeMs: _a, ...left } = fromJsonl;
-    const { executionTimeMs: _b, ...right } = fromCsv;
+    // Compare everything except the wall-clock field and the source LINE
+    // numbers: JSONL row 4 is line 4 while the CSV row under a header is
+    // line 5, and that honest difference is the point of the field.
+    const withoutLineNumbers = (r: typeof fromJsonl) => ({
+      ...r,
+      disagreements: r.disagreements.map(({ lineNumber: _line, ...row }) => row),
+    });
+    const { executionTimeMs: _a, ...left } = withoutLineNumbers(fromJsonl);
+    const { executionTimeMs: _b, ...right } = withoutLineNumbers(fromCsv);
     expect(left).toEqual(right);
   });
 });

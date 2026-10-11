@@ -363,3 +363,115 @@ test.describe("Judgewright shell journeys", () => {
     await expect(page.locator("#faq")).toBeVisible();
   });
 });
+
+
+
+/**
+ * D2 — the full report card on a KNOWN fixture: the seeded κ CI, the letter
+ * grade, the α panel with its mandatory disclosure, and the windowed
+ * disagreement table. The fixture is the AC-10 headline (950/1000 rows agree,
+ * κ 0.5192307692307692, α 0.5192400192400193), so what the pane shows can be
+ * checked against the pinned references instead of re-derived.
+ */
+test.describe("the D2 report card — κ CI, grade, α panel, disagreements", () => {
+  /** The AC-10 headline fixture as JSONL: 920 (P,P), 30 (N,P), 20 (P,N), 30 (N,N). */
+  const HEADLINE = [
+    ...Array.from({ length: 920 }, () => ["P", "P"] as const),
+    ...Array.from({ length: 30 }, () => ["N", "P"] as const),
+    ...Array.from({ length: 20 }, () => ["P", "N"] as const),
+    ...Array.from({ length: 30 }, () => ["N", "N"] as const),
+  ]
+    .map(([human, judge], i) =>
+      JSON.stringify({
+        example_id: `ex-${i}`,
+        judge_label: judge,
+        human_label: human,
+      })
+    )
+    .join("\n");
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto(TOOL_URL, { waitUntil: "domcontentloaded" });
+    await waitWorkspaceReady(page);
+    await waitClientReady(page);
+  });
+
+  test("renders the κ CI, the grade, the α panel and ≥1 disagreement row", async ({
+    page,
+  }) => {
+    await fillStable(verdictsInput(page), HEADLINE);
+
+    const pane = page.locator('[data-report-state="ready"]');
+    await expect(pane).toBeVisible({ timeout: COMPUTE_TIMEOUT });
+
+    // Headline numbers, against the pinned references.
+    await expect(pane.locator('[data-stat="agreement"]')).toContainText("95.0%");
+    await expect(pane.locator('[data-stat="kappa"]')).toContainText(
+      "0.5192307692307692"
+    );
+
+    // The κ CI bracket rides beside the coefficient (AC-13 / AC-52).
+    const ciStat = pane.locator('[data-stat="kappa"][data-ci="kappa"]');
+    await expect(ciStat).toBeVisible();
+    await expect(ciStat).toContainText("95% CI");
+
+    // The letter grade of the UNWEIGHTED κ, with its convention disclosed.
+    await expect(pane.locator("[data-grade]")).toContainText("C");
+    await expect(pane.locator("[data-grade]")).toContainText("moderate");
+    await expect(pane.locator("[data-grade]")).toContainText(
+      "Landis–Koch convention applied to unweighted κ"
+    );
+
+    // The α panel: the panel figure, the human-ceiling honesty and the
+    // mandatory κ-vs-α disclosure (AC-34 / AC-50).
+    const alphaPanel = pane.locator("[data-alpha-panel]");
+    await expect(alphaPanel).toBeVisible();
+    await expect(alphaPanel.locator("[data-alpha-panel-value]")).toContainText(
+      "0.519240019240019"
+    );
+    await expect(alphaPanel.locator("[data-alpha-humans-value]")).toHaveText("—");
+    await expect(alphaPanel).toContainText(
+      "with one human rater the panel is 2 coders, so this is Krippendorff's α (a chance-corrected coefficient), not Cohen's κ; the two differ by construction"
+    );
+
+    // The disagreement table: windowed, honest about the window, and it does
+    // contain the 50 rows where human and judge disagree.
+    const table = pane.locator("[data-disagreement-table]");
+    await expect(table).toBeVisible();
+    await expect(table.locator("tbody tr")).toHaveCount(1000);
+    await expect(table.locator('tbody tr[data-agree="false"]')).toHaveCount(50);
+    await expect(table.locator("[data-disagreement-strip]")).toContainText(
+      "showing 1,000 of 1,000 rows"
+    );
+  });
+
+  test("⌘⇧C copies the one-line verdict with the grade and the CI bracket", async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await fillStable(verdictsInput(page), HEADLINE);
+    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
+      timeout: COMPUTE_TIMEOUT,
+    });
+    // The copy must carry THIS fixture's report, not the seeded 12-row demo:
+    // wait for the headline figure to settle before pressing the chord.
+    await expect(
+      page.locator('[data-stat="kappa"]')
+    ).toContainText("0.5192307692307692", { timeout: COMPUTE_TIMEOUT });
+
+    await page.keyboard.press(`${MOD}+Shift+KeyC`);
+    await expect(page.locator('[data-toast-variant="success"]')).toBeVisible({
+      timeout: BOUNDED_TIMEOUT,
+    });
+
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toContain("1,000 rows");
+    expect(copied).toContain("acc 95.0%");
+    expect(copied).toContain("κ 0.5192307692307692");
+    expect(copied).toContain("always-majority 94.0%");
+    // The D2 additions: the seeded CI bracket and the letter grade.
+    expect(copied).toContain("grade C");
+    expect(copied).toMatch(/κ 0\.5192307692307692\d* \[0\.\d+, 0\.\d+\]/);
+  });
+});

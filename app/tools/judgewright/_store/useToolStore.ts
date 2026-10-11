@@ -11,8 +11,10 @@ import {
   STORAGE_KEY,
   STORAGE_VERSION,
 } from "../_lib/constants";
+import { MAX_TABLE_ROWS } from "../_lib/constants";
 import type {
   ComputationResult,
+  DisagreementWindow,
   JudgewrightSettings,
   ParseIssue,
   VerdictAnalysis,
@@ -42,6 +44,14 @@ interface ToolState {
    * the analyzed paste. Never persisted — user content is the only slice.
    */
   stats: VerdictAnalysis | null;
+
+  /**
+   * The disagreement display window: the first MAX_TABLE_ROWS per-example rows
+   * plus the true analyzed total. Both the worker path and the main-thread
+   * fallback fill it, so a 200k-row settle transfers a summary rather than the
+   * full table (AC-16/AC-59); the full set is recomputed on demand.
+   */
+  disagreementWindow: DisagreementWindow | null;
 
   /** First MAX_PARSE_ISSUES parse issues, for the pane's issue list. */
   parseIssues: ParseIssue[];
@@ -78,7 +88,7 @@ interface ToolState {
    */
   applyComputation: (
     result: ComputationResult,
-    options?: { announce?: boolean }
+    options?: { announce?: boolean; window?: DisagreementWindow | null }
   ) => void;
 
   reset: () => void;
@@ -120,6 +130,7 @@ export const useToolStore = create<ToolState>()(
         set((state) => ({ settings: { ...state.settings, ...patch } })),
 
       stats: null,
+      disagreementWindow: null,
       parseIssues: [],
       parseIssueCount: 0,
 
@@ -153,6 +164,7 @@ export const useToolStore = create<ToolState>()(
             // the previous paste must not survive a failed one.
             return {
               stats: null,
+              disagreementWindow: null,
               parseIssues: result.issues ?? [],
               parseIssueCount: result.issueCount ?? 0,
               degraded: result.degraded,
@@ -164,6 +176,15 @@ export const useToolStore = create<ToolState>()(
           }
           return {
             stats: result.stats,
+            // The window the worker posted, or the one implied by the settled
+            // rows — the main-thread fallback builds the same capped slice so
+            // the pane's "showing X of Y" strip is honest on both paths.
+            disagreementWindow:
+              options?.window ?? {
+                offset: 0,
+                rows: result.stats.report.disagreements.slice(0, MAX_TABLE_ROWS),
+                totalCount: result.stats.report.n,
+              },
             parseIssues: result.stats.parse.issues,
             parseIssueCount: result.stats.parse.issueCount,
             degraded: result.degraded,
@@ -185,6 +206,7 @@ export const useToolStore = create<ToolState>()(
           verdictsText: "",
           rubric: "",
           stats: null,
+          disagreementWindow: null,
           parseIssues: [],
           parseIssueCount: 0,
           errorMessage: null,

@@ -23,9 +23,11 @@ import {
   WORKER_DEADLINE_MS,
 } from "./constants";
 import { parseVerdicts } from "./parse";
-import { computeReport } from "./report";
+import { computeReport, reportDisagreementWindow } from "./report";
 import type {
+  AlphaLevel,
   AnalysisOutcome,
+  CalibrationReport,
   ComputeEngine,
   ParseIssue,
   VerdictAnalysis,
@@ -42,6 +44,10 @@ export interface AnalyzeOptions {
   maxInputChars?: number;
   /** Which engine is running — stamped into the result, never guessed. */
   engine?: ComputeEngine;
+  /** Krippendorff's α level (default nominal; the selector UI lands in D3). */
+  alphaLevel?: AlphaLevel;
+  /** Explicit rank order for ordinal α on non-numeric labels. */
+  labelOrder?: string[];
 }
 
 /** UTF-8 byte length — the honest unit for a paste budget. */
@@ -67,9 +73,12 @@ function leadingIssues(issues: readonly ParseIssue[]): ParseIssue[] {
   return issues.slice(0, MAX_PARSE_ISSUES);
 }
 
+export { reportDisagreementWindow };
+
 /**
- * Analyzes a pasted verdict set and settles either the D1 calibration report
- * or a friendly error value.
+ * Analyzes a pasted verdict set and settles either the D2 calibration report
+ * (α, weighted κ, seeded CIs, letter grade, deflation and the per-example
+ * disagreement rows) or a friendly error value.
  */
 export function analyzeVerdicts(
   verdictsText: string,
@@ -127,13 +136,15 @@ export function analyzeVerdicts(
   }
 
   try {
-    const report = computeReport(parsed.verdicts, {
+    const report: CalibrationReport = computeReport(parsed.verdicts, {
       seed,
       confidenceLevel,
       deadlineMs,
       engine,
       truncated: parsed.capped,
       rowCount: parsed.rowCount,
+      alphaLevel: options.alphaLevel,
+      labelOrder: options.labelOrder,
     });
 
     const stats: VerdictAnalysis = {

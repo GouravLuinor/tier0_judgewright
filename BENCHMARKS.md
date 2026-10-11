@@ -19,6 +19,73 @@ row width (id + two labels + two critiques ≈ 170 bytes/row), median of 5 runs:
 The cap ceiling (35 MB) is reached at roughly `MAX_ROWS * 178 bytes` — the two limits stay at
 the same order of magnitude, which is the intent of the cap table in `_lib/constants.ts`.
 
+## Statistics core — parse + report + seeded bootstrap (D2, the AC-61 record)
+
+Same box (Node v24.13.0, WSL2), median of 5 runs, the benchmark payload above (id + two labels
++ two critiques ≈ 170 bytes/row), panel `[judge, human]`, seed 42, tier B from
+`bootstrapTier`, α budget `alphaBootstrapTier`. `bootstrapBundle` is measured alone and the
+full `analyzeVerdicts` dispatch (parse → report → CIs) with the 1,000 ms cooperative budget:
+
+| Rows | B | α B | acc+κ CI | + α CI | full dispatch |
+|---|---:|---:|---:|---:|---:|
+| 1,000 | 2,000 | 2,000 | 13 ms | 14 ms | 18 ms |
+| 20,000 | 2,000 | 2,000 | 131 ms | 132 ms | 222 ms |
+| 50,000 | 2,000 | 2,000 | 330 ms | 334 ms | 528 ms |
+| 100,000 | 1,000 | 250 | 403 ms | 384 ms | 893 ms |
+| 150,000 | 500 | 250 | 267 ms | 263 ms | 894 ms |
+| 200,000 | 500 | 250 | 351 ms | 357 ms | 1,280 ms |
+
+α costs ≤ 6 ms at every tier because it shares the resample's class-pair counts instead of
+rebuilding the coincidence matrix (the §1.8 protocol: one RNG stream, one index array, one
+fused pass). The dispatch stays inside the 1,500 ms watchdog and inside the 1,000 ms
+cooperative budget at ≤ 150,000 rows; at 200,000 rows the checkpoint interval can let the
+milliseconds drift past the budget, and the FM-7 abort (CIs dropped — disclosed in the receipt,
+point statistics and `B` unchanged) is the documented escape hatch.
+
+Reproduce:
+
+```bash
+cat > <repo>/app/tools/judgewright/_lib/__tests__/tmp.bench.test.ts <<'EOF'
+import { it } from "vitest";
+import { analyzeVerdicts } from "../analyze";
+import { alphaBootstrapTier, bootstrapBundle, bootstrapTier, encodePanel } from "../bootstrapCI";
+const build = (n: number) =>
+  Array.from({ length: n }, (_, i) =>
+    JSON.stringify({
+      example_id: `ex-${i}`,
+      judge_label: i % 3 === 0 ? "fail" : "pass",
+      human_label: i % 4 === 0 ? "fail" : "pass",
+      judge_critique: "Judge rationale text for row " + i,
+      human_critique: "Human rationale text for row " + i,
+    })
+  ).join("\n");
+const median = (runs: number[]) => [...runs].sort((a, b) => a - b)[Math.floor(runs.length / 2)];
+it("bench", () => {
+  for (const n of [1_000, 20_000, 50_000, 100_000, 150_000, 200_000]) {
+    const text = build(n);
+    const parsed = analyzeVerdicts(text);
+    if (!parsed.ok) throw new Error(parsed.error);
+    const rows = parsed.stats.report.disagreements;
+    const panel = encodePanel(rows.map((r) => r.judgeLabel), rows.map((r) => r.humanLabel));
+    const b = bootstrapTier(n);
+    const alphaB = alphaBootstrapTier(n, b);
+    const runs: number[] = [];
+    const alphaRuns: number[] = [];
+    const dispatchRuns: number[] = [];
+    for (let r = 0; r < 5; r++) {
+      let t = Date.now(); bootstrapBundle(panel, { seed: 42, B: b, alpha: 0.05 }); runs.push(Date.now() - t);
+      t = Date.now(); bootstrapBundle(panel, { seed: 42, B: b, alphaB, alpha: 0.05 }); alphaRuns.push(Date.now() - t);
+      t = Date.now(); const out = analyzeVerdicts(text, { seed: 42, confidenceLevel: 0.95, deadlineMs: 1_000 });
+      dispatchRuns.push(Date.now() - t);
+      if (!out.ok) throw new Error(out.error);
+    }
+    console.log(`n=${n} B=${b} alphaB=${alphaB} | acc+kappa ${median(runs)}ms | +alpha ${median(alphaRuns)}ms | full ${median(dispatchRuns)}ms`);
+  }
+});
+EOF
+npx vitest run --reporter=verbose <that file> 2>&1 | grep "n="
+```
+
 Reproduce:
 
 ```bash

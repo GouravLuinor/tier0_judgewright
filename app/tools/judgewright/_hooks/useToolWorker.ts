@@ -16,6 +16,7 @@ import {
 } from "../_lib/constants";
 import type {
   ComputationResult,
+  DisagreementWindow,
   WorkerInputPayload,
   WorkerOutputPayload,
 } from "../_lib/types";
@@ -123,7 +124,7 @@ export function useToolWorker() {
   );
 
   const handleResult = useCallback(
-    (result: ComputationResult) => {
+    (result: ComputationResult, window?: DisagreementWindow) => {
       if (result.error) {
         // Rejections settle immediately and must not be followed by a
         // trailing success ping from an earlier keystroke.
@@ -131,7 +132,7 @@ export function useToolWorker() {
         applyComputation(result);
         return;
       }
-      applyComputation(result, { announce: false });
+      applyComputation(result, { announce: false, window });
       // Successes trail so a burst of keystrokes collapses into one
       // screen-reader update.
       clearSuccessAnnouncement();
@@ -156,7 +157,7 @@ export function useToolWorker() {
       if (event.data.id === watchdogIdRef.current) clearWatchdog();
 
       setIsProcessing(false);
-      handleResult(event.data);
+      handleResult(event.data, event.data.disagreementWindow);
     },
     [clearWatchdog, handleResult, setIsProcessing]
   );
