@@ -1,9 +1,9 @@
 # Judgewright — ARCHITECTURE (shipped)
 
-> **Status:** SHIPPED ARCHITECTURE, reconciled against the code at commit `3beea5e`
-> (branch `main`). This document describes what the product **does** today. Where an
-> earlier planning revision of this file described something that was never built, it has
-> been corrected rather than kept.
+> **Status:** SHIPPED ARCHITECTURE, reconciled against the code at commit `05330ac`
+> (branch `main`); the code gates are unchanged since `3beea5e`. This document describes
+> what the product **does** today. Where an earlier planning revision of this file described
+> something that was never built, it has been corrected rather than kept.
 >
 > **Canonical references:** [`AGENTS.md`](./AGENTS.md) (binding axioms),
 > [`README.md`](./README.md) (product surface), [`BENCHMARKS.md`](./BENCHMARKS.md)
@@ -33,10 +33,12 @@ makes the receipt unverifiable. All hot loops are hand-written over typed arrays
 (`Int32Array`/`Float64Array`) with the RNG advanced **inline** (no closure call per draw).
 
 **Measured, not estimated:** `npm run bench` records the full 200k-row dispatch at a median of
-**1,011 ms** (narrow payload) and **1,361 ms** (wide payload) against an **8,000 ms** watchdog
-tier, with the parse the dominant cost (471 ms / 702 ms). See
-[`BENCHMARKS.md`](./BENCHMARKS.md) — those numbers replace the planning estimates this
-section used to carry.
+**1,019.80 ms** (narrow payload) and **1,328.82 ms** (wide payload) against an **8,000 ms**
+watchdog tier, with the parse the dominant cost (450.69 ms / 621.01 ms) — the medians of the
+run recorded in [`BENCHMARKS.md`](./BENCHMARKS.md) on **2026-10-11**, which replace the
+planning estimates this section used to carry. Absolute milliseconds on that shared,
+virtualized box move a few percent between runs, so the dated BENCHMARKS table — never this
+line — is the source of truth for them.
 
 **No transcendentals (adjudicated rule, `AC-60`):** `_lib/` contains **no**
 `Math.log`, `Math.pow`, `Math.exp`, `Math.sqrt`, `Math.sin`, `Math.cos`, `Math.atan` — every
@@ -481,8 +483,9 @@ report LRU (worker)          →  32 entries, keyed by an FNV-1a content hash wi
 
 1. **Two-phase compute inside one dispatch.** Phase A (parse → confusion → κ → α → baseline →
    grade → disagreements → bias → calibration) is always cheap and always runs: measured at
-   0.9 ms (1k rows) to 201 ms (200k rows). Phase B (bootstrap CIs via `bootstrapBundle`) is
-   the expensive half and is deadline-bounded. The worker returns **one** payload so the store
+   0.9 ms (1k rows) to 180.75 ms (200k rows) in the 2026-10-11 run recorded in
+   [`BENCHMARKS.md`](./BENCHMARKS.md). Phase B (bootstrap CIs via `bootstrapBundle`) is the
+   expensive half and is deadline-bounded. The worker returns **one** payload so the store
    settles atomically — and that payload is the **windowed** payload: the full report with
    `disagreements` replaced by the first `MAX_TABLE_ROWS` (2,000) rows, `report.n`, the
    receipt and every point statistic untouched. The full row set is never structured-cloned
@@ -493,9 +496,10 @@ report LRU (worker)          →  32 entries, keyed by an FNV-1a content hash wi
    silently changes `B`, a point statistic or the baseline (AGENTS §31).
 3. **Worker deadline checks are amortized**, at phase boundaries and every 128 bootstrap
    replicates. That is a *sampling*, not a wall — which is why, near the budget boundary,
-   whether the CIs survive is a distribution rather than a constant (documented with measured
-   runs in [`BENCHMARKS.md`](./BENCHMARKS.md)). The watchdog tier is sized so an in-cap
-   200k-row dispatch is never aborted: 8,000 ms against a measured 1,011–1,361 ms.
+   whether the CIs survive is a distribution rather than a constant (documented with the
+   measured runs recorded in [`BENCHMARKS.md`](./BENCHMARKS.md) on 2026-10-11). The watchdog
+   tier is sized so an in-cap 200k-row dispatch is never aborted: 8,000 ms against the
+   recorded 1,019.80–1,328.82 ms (medians move a few percent between runs on this box).
 4. **Watchdog ≠ deadline.** The watchdog protects against an unkillable hang (a bug, or an
    extension-hostile environment); the cooperative deadline reports first in normal operation,
    because Phase B is cooperative. `onerror` / `onmessageerror` catch a crashed or

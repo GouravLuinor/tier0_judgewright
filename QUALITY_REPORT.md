@@ -2,8 +2,9 @@
 
 Honest gate record for the **shipped v1.0.0**. Nothing here is aspirational: every number was
 produced by running the command named beside it on this machine at this commit
-(`3beea5e`, branch `main`), and where a bar item is not satisfied it is listed under
-[Known gaps](#known-gaps-honest-list) with its reason — not smoothed over.
+(`05330ac`, branch `main`; the five code gates are unchanged since `3beea5e`, while the
+bench/repro tooling was added after it), and where a bar item is not satisfied it is listed
+under [Known gaps](#known-gaps-honest-list) with its reason — not smoothed over.
 
 Run environment: **Node v24.13.0**, npm 11.8.0, Linux (WSL2), 12 × 13th Gen Intel Core
 i7-13620H, 6.8 GiB RAM.

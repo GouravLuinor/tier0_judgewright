@@ -238,7 +238,9 @@ app/
     │   ├── useToolWorker.ts        # worker lifecycle · debounce · tiered watchdog · degrade
     │   ├── useKeyboardShortcuts.ts # ⌘K ⌘P ⌘⇧C ⌘↵
     │   └── useAuth.ts              # env-gated no-op auth
-    ├── _lib/                       # PURE: no React, no DOM, no IO
+    ├── _lib/                       # PURE core (statistics/parsing); no React, no DOM, no IO
+    │                               # except the two browser-boundary exemptions authGate.ts +
+    │                               # supabaseClient.ts, enumerated in purity.test.ts
     │   ├── types.ts                # shared types + worker protocol (zero runtime imports)
     │   ├── constants.ts            # every cap/budget/key, one import site
     │   ├── analyze.ts              # the ONE pipeline seam both engines call
