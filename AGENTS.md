@@ -96,12 +96,21 @@
     grep for duplicate values.
 27. **Worker protocol.** Monotonic request ids; the stale-response guard drops a late reply
     *before* it can touch state. Adaptive debounce: `≤5,000 → 0ms`, `>5,000 → 40ms`,
-    `>20,000 → 120ms`, `>200,000 → 250ms`. Watchdog at `1,500ms` terminates, kills timers,
-    bumps the request id (so any zombie reply is stale), respawns and settles a friendly error.
+    `>20,000 → 120ms`, `>200,000 → 250ms`. The watchdog is **tiered by payload size** —
+    `watchdogMsFor(chars)`: `≤20,000 → 1,500ms`, `≤200,000 → 3,000ms`, `≤2,000,000 → 5,000ms`,
+    above → `8,000ms`. On fire it terminates, kills timers, bumps the request id (so any zombie
+    reply is stale), respawns, and settles a friendly error **atomically** — the stats and the
+    window are cleared in the same `set()` that records it. The tiering (A2) exists because a
+    flat 1.5s wall aborted legitimate 200k-row dispatches, which the "an in-cap input always
+    settles a report" contract (`e2e/perf.spec.ts`, **AC-27 / AC-59**) forbids. The 1,000ms cooperative deadline is what
+    decides whether the bootstrap CIs survive; a trip drops CIs only, never a point statistic,
+    never `B`, never the baseline.
 28. **ONE degradation path** (`degradeToMainThread`) that kills timers, flips
     `isWorkerAvailable`, announces in one `set()` with zero orphan workers, and runs the **same**
     pure core synchronously under `SYNC_DEADLINE_MS` (stricter than the worker budget). The
-    fallback is never asynchronous-function-shaped.
+    fallback is never asynchronous-function-shaped. On that path **only**, the parse carries the
+    same absolute budget, checked every 512 rows (`parseDeadlineArmed`, A10) — the worker path
+    parses unbudgeted by design, under its own tiered watchdog.
 29. Cooperative budgets are checked inside the worker **before** every phase; on abort, the
     main thread state flag flips on the *next* guarded check — never blind, never mid-`set()`.
 30. Errors are values (`ok: false`), never throws. A last-resort envelope exists for

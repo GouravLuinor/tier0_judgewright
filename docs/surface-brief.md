@@ -38,8 +38,8 @@ anyone up. The only warmth is the lime measurement — a single, restrained, con
 
 **CONTENT & COPY.** First person plural, plain language, no buzzwords, no triumphant verbs.
 Buttons are single verbs ("Compute", "Copy report", "Export"). Every number the page claims is
-cited and marked "cited, not computed by this tool" (scaffold: no third-party numbers are
-claimed at all, which is why the education copy is digit-free prose plus formulas). The status
+cited and marked "cited, not computed by this tool" — the education copy stays digit-free prose
+plus formulas, which `_lib/__tests__/content.test.ts` guards. The status
 strip is honest about phase, rows analyzed, characters and elapsed ms, and the receipt names
 the seed, replicate count, budget and engine.
 

@@ -22,15 +22,16 @@ workstation seeds twelve hand-checkable rows.
 
 ## 2. Add the rubric (optional)
 
-The rubric pane takes up to 8,000 characters and is what the diagnosis milestone reads. Parsing
+The rubric pane takes up to 8,000 characters and is what the optional diagnosis reads. Parsing
 and every statistic work without it.
 
 ## 3. Read the report
 
-The right pane mirrors what was analyzed and settles the placeholder measurement. The
-calibration card below it is where the real report lands — confusion matrix, chance-corrected
-agreement, the agreement-to-κ deflation, Krippendorff's α, seeded bootstrap CIs and the
-letter grade, each with its reproducibility receipt.
+The right pane settles the real report: confusion matrix, chance-corrected agreement, the
+agreement-to-κ deflation, Krippendorff's α, the seeded bootstrap CIs and the letter grade,
+each with its reproducibility receipt. Above it the station names what the whole paste
+contains (characters, words, bytes, lines), which is honest about the whole paste even when
+the report only covers the valid rows.
 
 Every figure names the engine that produced it. If the worker is unavailable the amber banner
 says so and the same core runs on the main thread — the numbers are identical, only the live

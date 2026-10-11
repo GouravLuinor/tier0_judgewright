@@ -12,20 +12,29 @@ panels cover calibration (ECE/Brier), per-class precision/recall/F1, position/le
 confidence histogram. Every figure carries a reproducibility receipt (seed, replicate count,
 budget, engine).
 
-## What exists today (scaffold)
+## What exists today (shipped v1.0.0)
 
-The runnable, dual-theme application shell with the worker pipeline wired end to end:
-paste → debounce → Web Worker → settle → render → copy. The report pane shows the placeholder
-measurement (characters / words / bytes / lines + echo) and an explicitly labelled deferred
-card. Deterministic statistics are the next milestone.
+The whole product: a dual-theme application shell with the worker pipeline wired end to end
+(paste → debounce → Web Worker → settle → render → copy) **and the full deterministic
+statistics engine behind it** — parser and label-vocabulary rule, confusion matrix with
+binary and k-class metrics, unweighted + weighted Cohen's κ, the chance baseline, the
+Δκ-deflation headline, Krippendorff's α at all three levels, seeded byte-reproducible
+bootstrap CIs, the Landis–Koch letter grade, ECE/Brier with both score semantics, the
+position/verbosity bias panel, the per-example disagreement table, and the reproducibility
+receipt. The report pane shows measured numbers or an honest "not computable from your
+input" reason — never a placeholder.
 
-## Target Gate
+## Gate (as shipped)
 
-- **Functional pass rate (scaffold, as shipped):** 25 Playwright tests passing with 2
-  documented-skips (pixel baselines) out of 27, plus 53/53 vitest. Target Gate: every golden
-  pair test green; 42/42 ACs closed.
-- **Performance budget:** click-to-usable under 1s, 550+ hours of agent compute invested by
-  the agent coalition, deterministic+typed architecture, security/CI, exact DOM contract.
+- **Functional pass rate:** **48 Playwright tests passing** with 2 documented-skips (pixel
+  baselines) out of 50, plus **361/361 vitest** across 24 files — `npm run test:e2e` and
+  `npm test` both exit 0.
+- **Coverage:** statements 94.4% · branches 79.24% · functions 98.62% · lines 96.77%, scoped
+  to `_lib`, all above the configured thresholds.
+- **Bundle:** `/tools/judgewright` First Load JS **199 kB** against the 200 kB budget.
+- **Performance:** measured in `BENCHMARKS.md` — a 1,000-row session settles in ~19 ms, a
+  100,000-row session in ~873 ms, and a 200,000-row dispatch settles (never aborts) at a
+  median 1,011–1,361 ms.
 - **Zero-egress proof:** first paint and a full compute make no non-localhost request (e2e),
   and the shipped CSP allows nothing outside `DECLARED_ORIGINS` (static unit test).
 
@@ -37,12 +46,14 @@ card. Deterministic statistics are the next milestone.
 - **Reproducible above clever.** Tiered B by row count, seeded, deterministic — never
   wall-clock adaptive, never auto-detected.
 
-## Roadmap seams
+## Seams (all landed)
 
-| Seam | Landed at |
+| Seam | Status |
 |---|---|
-| Statistics core (`_lib/analyze.ts` → `report.ts` family) | M1/M2 |
-| Disagreement table + virtualized window + `MAX_TABLE_ROWS` | M3 |
-| Optional BYOK diagnosis (`_services/llmDiagnosis.ts`, BAR §8 exception) | M4 |
-| Export bundle + receipt persistence | M5 |
-| Content citations + tutorial + benchmarks | M1.8 / M5 docs |
+| Statistics core — `_lib/analyze.ts` + the `report.ts` family | **shipped** (D1/D2) |
+| Disagreement table + `MAX_TABLE_ROWS` window + honest totals | **shipped** (D2/A3) |
+| Optional BYOK diagnosis (`_services/llmDiagnosis.ts`, BAR §8 exception) | **shipped** (D3/A11) |
+| Export bundle + receipt | **shipped** (D3) |
+| Content citations + tutorial + benchmarks | **shipped** (`docs/`, `tutorial.md`, `BENCHMARKS.md`) |
+| α-level + ECE binning **selector UI** | **not shipped** — wired in `ComputeOptions`, no UI yet; the engine defaults to nominal α + equal-width 10-bin ECE and discloses which it used |
+| Pixel baselines | **skipped by policy** until a human regenerates the goldens |

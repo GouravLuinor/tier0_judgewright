@@ -13,7 +13,10 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "bench": "tsx scripts/bench.ts",
+    "repro:seed": "node --experimental-strip-types app/tools/judgewright/_lib/__tests__/repro.entry.ts",
+    "repro:analyze": "node --experimental-strip-types app/tools/judgewright/_lib/__tests__/repro.analyze.entry.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.6",
@@ -43,6 +46,7 @@
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "4.23.15",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
   }
