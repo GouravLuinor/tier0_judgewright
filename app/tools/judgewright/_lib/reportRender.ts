@@ -9,8 +9,9 @@
  *
  * D2 note: the one-line verdict carries the κ CI bracket and the letter
  * grade beside the point statistics; a CI that was dropped under the deadline
- * is named, never invented. The canonical AC-55 golden file itself is checked
- * in by the M2/M3 milestone.
+ * is named, never invented. D3 adds the ECE/Brier + bias sections to the
+ * markdown card, prints the positive class in the receipt (AC-51), and the
+ * agreement JSONL export (`renderAgreementJsonl`).
  */
 
 import { bootstrapTierCopy } from "./bootstrapCI.ts";
@@ -68,6 +69,7 @@ export function renderReceipt(
   const lines: string[] = [];
   lines.push("REPRODUCIBILITY RECEIPT — Judgewright calibration report");
   lines.push(`engine: ${report.engine} · rows analyzed: ${formatCount(report.n)}`);
+  lines.push(`positive class: ${report.positiveClass ?? "— (single-label input)"}`);
   lines.push("");
 
   if (report.kappa === null || inputs === null) {
@@ -217,6 +219,25 @@ export function renderOneLineVerdict(report: CalibrationReport): string {
 }
 
 /**
+ * The agreement export as JSONL (AC-50 / AC-28): one line per row with
+ * `{example_id, judge_label, human_label, agree}`. The fields are format-derived
+ * and stable, so a JSONL input and the identical CSV input produce byte-equal
+ * exports — the export proves the two formats settled the same report.
+ */
+export function renderAgreementJsonl(report: CalibrationReport): string {
+  return report.disagreements
+    .map((row) =>
+      JSON.stringify({
+        example_id: row.exampleId,
+        judge_label: row.judgeLabel,
+        human_label: row.humanLabel,
+        agree: row.agree,
+      })
+    )
+    .join("\n");
+}
+
+/**
  * The markdown report card the Copy button ships: headline figures, the
  * deflation, the binary metrics, the k-class table and the receipt.
  */
@@ -316,6 +337,50 @@ export function renderMarkdownReport(report: CalibrationReport): string {
   lines.push(`grade on α: ${ALPHA_KAPPA_BANDS_NOTE}`);
   lines.push("");
 
+  const calibration = report.calibration;
+  if (calibration !== null) {
+    const scheme =
+      calibration.mode === "width" ? "equal-width" : "equal-frequency";
+    lines.push(
+      `ECE / Brier (point estimates, no CI — score mode: ${calibration.scoreMode} · ${scheme}, ${calibration.bins} bins · positive class "${calibration.positiveClass}"):`
+    );
+    if (calibration.computable) {
+      lines.push(
+        `- ECE ${calibration.ece === null ? "—" : sigFigs(calibration.ece)} · Brier ${calibration.brier === null ? "—" : sigFigs(calibration.brier)} — over ${formatCount(calibration.scoreCount)} scored rows`
+      );
+    } else {
+      lines.push(
+        `- ${calibration.reason ?? "not computable - no numeric scores"}`
+      );
+    }
+    if (calibration.mismatchWarning !== null) {
+      lines.push(`MODE MISMATCH: ${calibration.mismatchWarning}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("Bias panel (position / verbosity):");
+  if (report.bias.computable) {
+    const pb =
+      report.bias.positionBias === null
+        ? "—"
+        : sigFigs(report.bias.positionBias);
+    const vb =
+      report.bias.verbosityBias === null
+        ? "—"
+        : sigFigs(report.bias.verbosityBias);
+    lines.push(
+      `- position bias ${pb} (P(first slot) − 0.5, n=${formatCount(report.bias.positionN)}) · verbosity bias ${vb} (P(prefers longer) − 0.5, n=${formatCount(report.bias.verbosityN)})`
+    );
+    lines.push(`- ${report.bias.note}`);
+  } else {
+    lines.push(`- ${report.bias.note}`);
+    if (report.bias.missingColumns.length > 0) {
+      lines.push(`- needs: ${report.bias.missingColumns.join(", ")}`);
+    }
+  }
+  lines.push("");
+
   const shown = report.disagreements.length;
   const disagreements = report.disagreements.filter((row) => !row.agree);
   lines.push(
@@ -326,7 +391,7 @@ export function renderMarkdownReport(report: CalibrationReport): string {
   lines.push(report.receipt);
   lines.push("");
   lines.push(
-    "Seeded, byte-reproducible percentiles · Krippendorff's α · letter grade · ECE/Brier · bias panel · LLM diagnosis: the later milestones land as typed seams, never fabricated values."
+    "ECE/Brier and the bias metrics are point estimates and carry no interval; a not-computable panel names what it needs. The optional LLM diagnosis is a separate single-call opt-in (one click, one key, never automatic) and is never folded into this card."
   );
   return lines.join("\n");
 }

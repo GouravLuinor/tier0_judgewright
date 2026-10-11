@@ -123,9 +123,21 @@ describe("computeReport — the D2 seams are filled, the D3 ones stay typed", ()
     expect(report.ciDropped).toBe(false);
   });
 
-  it("still leaves the D3 panels as typed seams — never fabricated", () => {
-    expect(report.calibration).toBeNull();
+  it("fills the D3 panels HONESTLY — never fabricated (AC-48 / FM-3)", () => {
+    // The headline fixture carries no judge_score, so ECE/Brier are null with a
+    // reason (never 0), and neither bias column is present, so both bias
+    // signals are null with the missing columns named.
+    expect(report.calibration).not.toBeNull();
+    expect(report.calibration?.computable).toBe(false);
+    expect(report.calibration?.ece).toBeNull();
+    expect(report.calibration?.brier).toBeNull();
+    expect(report.calibration?.reason).toBe("not computable — no numeric scores");
+    expect(report.calibration?.positiveClass).toBe("pos");
+    expect(report.calibration?.scoreMode).toBe("p-positive");
     expect(report.bias.computable).toBe(false);
+    expect(report.bias.positionBias).toBeNull();
+    expect(report.bias.verbosityBias).toBeNull();
+    expect(report.bias.missingColumns).toEqual(["position", "preferred_longer"]);
     expect(report.bias.note).toContain("Not computable from your input");
   });
 

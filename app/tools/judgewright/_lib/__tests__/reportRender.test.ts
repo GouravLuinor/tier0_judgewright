@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { bootstrapTierCopy } from "../bootstrapCI";
 import {
   percent,
+  renderAgreementJsonl,
   renderMarkdownReport,
   renderOneLineVerdict,
   renderReceipt,
   sigFigs,
 } from "../reportRender";
+import { analyzeVerdicts } from "../analyze";
 import { computeReport } from "../report";
 import {
   ALPHA_KAPPA_BANDS_NOTE,
@@ -236,5 +238,57 @@ describe("renderReceipt — a reviewer can recompute κ from it alone", () => {
       { seed: 42, confidenceLevel: 0.95, deadlineMs: 1000, deadlineHit: false }
     );
     expect(receipt).toContain("κ: undefined");
+  });
+});
+
+/**
+ * AC-55 / m3: the one-line verdict is a golden string at 17 significant digits
+ * — the exact copy ⌘⇧C ships on the headline fixture.
+ */
+describe("AC-55 — the golden one-line verdict", () => {
+  it("is byte-exact on the headline fixture", () => {
+    expect(renderOneLineVerdict(report)).toBe(
+      "Human agreement: 1,000 rows · acc 95.0% [93.6%–96.4%] · κ 0.51923076923076927 [0.39718157858473974, 0.62811512020133808] · grade C · always-majority 94.0%"
+    );
+  });
+});
+
+/**
+ * AC-28: JSONL and CSV settle the SAME report, so the markdown card and the
+ * agreement JSONL export are byte-identical across the two input formats.
+ */
+describe("AC-28 — the exports are format-invariant", () => {
+  const JSONL = [
+    '{"example_id":"e1","judge_label":"pos","human_label":"pos"}',
+    '{"example_id":"e2","judge_label":"neg","human_label":"pos"}',
+    '{"example_id":"e3","judge_label":"neg","human_label":"neg"}',
+    '{"example_id":"e4","judge_label":"pos","human_label":"neg"}',
+  ].join("\n");
+  const CSV = [
+    "example_id,judge_label,human_label",
+    "e1,pos,pos",
+    "e2,neg,pos",
+    "e3,neg,neg",
+    "e4,pos,neg",
+  ].join("\n");
+
+  it("markdown card and agreement JSONL are identical for JSONL and CSV", () => {
+    const a = analyzeVerdicts(JSONL);
+    const b = analyzeVerdicts(CSV);
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(renderMarkdownReport(a.stats.report)).toBe(
+      renderMarkdownReport(b.stats.report)
+    );
+    expect(renderAgreementJsonl(a.stats.report)).toBe(
+      renderAgreementJsonl(b.stats.report)
+    );
+    expect(renderAgreementJsonl(a.stats.report).split("\n")).toEqual([
+      '{"example_id":"e1","judge_label":"pos","human_label":"pos","agree":true}',
+      '{"example_id":"e2","judge_label":"neg","human_label":"pos","agree":false}',
+      '{"example_id":"e3","judge_label":"neg","human_label":"neg","agree":true}',
+      '{"example_id":"e4","judge_label":"pos","human_label":"neg","agree":false}',
+    ]);
   });
 });

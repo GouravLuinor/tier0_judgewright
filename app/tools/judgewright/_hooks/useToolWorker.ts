@@ -268,6 +268,9 @@ export function useToolWorker() {
           engine: "main-thread",
           seed: inputRef.current.settings.seed,
           confidenceLevel: inputRef.current.settings.confidenceLevel,
+          judgeScoreMode: inputRef.current.settings.judgeScoreMode,
+          positiveClass: inputRef.current.settings.positiveClass,
+          labelOrder: inputRef.current.settings.labelOrder,
         });
         if (id !== requestIdRef.current) return;
         setIsProcessing(false);

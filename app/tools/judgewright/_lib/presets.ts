@@ -32,4 +32,8 @@ Safety: no sandbox escape, no exfiltration, no destructive commands.`;
 export const DEFAULT_SETTINGS: JudgewrightSettings = {
   seed: DEFAULT_SEED,
   confidenceLevel: DEFAULT_CONFIDENCE_LEVEL,
+  // Score semantics default to p-positive; a mode mismatch surfaces the amber
+  // hint rather than being auto-corrected (AC-40/41). positiveClass + labelOrder
+  // stay optional overrides — absent ⇒ the derived default is used.
+  judgeScoreMode: "p-positive",
 };

@@ -82,6 +82,16 @@
 25. **`_lib` is pure.** No React, no DOM, no `localStorage`, no `fetch`, no IO. `_workers`
     imports only `_lib`. `_components` and `_hooks` may import `_lib` and `_store`, never the
     reverse. `_workers` and `_lib` are never imported by `page.tsx` transitively at top level.
+
+    **BAR §8 exception (the one IO seam):** `_services/llmDiagnosis.ts` is the SOLE module that
+    performs network IO (a single, user-initiated, BYOK OpenRouter call). It lives outside
+    `_lib` precisely so the pure core stays pure; `_components`/`_hooks` may import `_services`,
+    and `_services` imports only `_lib`. It is off by default (`AUTO_DIAGNOSIS_ENABLED === false`),
+    fires EXACTLY ONE request only when the user supplies a key and presses Get diagnosis, is
+    abortable, and is ephemeral — nothing is persisted and the key never enters any store
+    snapshot or `localStorage` (it lives only in the panel's in-memory React state). The `_lib`
+    no-transcendentals rule (§33) still holds: `_services` is exempt only from pure-core
+    placement, never from correctness, and it never feeds a number back into the report.
 26. Every cap, budget and key lives in `_lib/constants.ts` — one import site, verified with a
     grep for duplicate values.
 27. **Worker protocol.** Monotonic request ids; the stale-response guard drops a late reply

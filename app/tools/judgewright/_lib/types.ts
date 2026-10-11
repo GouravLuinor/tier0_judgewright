@@ -22,6 +22,16 @@ export interface JudgewrightSettings {
   seed: number;
   /** 0.90 | 0.95 | 0.99 — the confidence level the CI panel will report. */
   confidenceLevel: number;
+  /**
+   * How the judge_score column is read (AC-40/C2): `p-positive` (default) treats
+   * the score as P(reference is positive); `confidence` treats it as the judge's
+   * confidence in its OWN emitted label (D3). User-selected, never auto-detected.
+   */
+  judgeScoreMode: JudgeScoreMode;
+  /** Override the default (second sorted) positive class; persisted when set. */
+  positiveClass?: string;
+  /** Explicit rank order for ordinal α on non-numeric labels. */
+  labelOrder?: string[];
 }
 
 // ── Input model ────────────────────────────────────────────────────────────
@@ -181,6 +191,8 @@ export interface CalibrationPanel {
   positiveClass: string | null;
   mismatchWarning: string | null;
   ambiguousReason: string | null;
+  /** The honest not-computable reason (FM-3); null when the panel is computable. */
+  reason: string | null;
   scoreCount: number;
   /** false ⇒ the UI says "not computable from your input". */
   computable: boolean;
@@ -189,10 +201,14 @@ export interface CalibrationPanel {
 export interface BiasPanel {
   computable: boolean;
   missingColumns: string[];
-  /** P(first slot) − 0.5 */
+  /** P(first slot) − 0.5 — deviation of first-slot preference from even. */
   positionBias: number | null;
   positionN: number;
-  /** P(judge prefers longer) − P(human prefers longer) */
+  /**
+   * P(preferred answer was longer) − 0.5 — deviation of length-preference
+   * from even, the honest one-flag form of "P(judge) − P(human)" (the judge
+   * vs human split is not in a single preference column).
+   */
   verbosityBias: number | null;
   verbosityN: number;
   note: string;
@@ -244,6 +260,18 @@ export interface ComputeOptions {
    * Explicit rank order for ordinal α on non-numeric labels. Without it (and
    * without numeric labels) ordinal α falls back to nominal with a warning —
    * never a silent alphabetical order.
+   */
+  /**
+   * Score semantics for ECE/Brier (D3, AC-40). Default `p-positive`. Never
+   * auto-detected — a mode mismatch surfaces the amber hint instead (AC-41).
+   */
+  judgeScoreMode?: JudgeScoreMode;
+  /** ECE bin count (default 10, equal-width). */
+  bins?: number;
+  /** ECE binning scheme (default `width`). */
+  binMode?: BinMode;
+  /**
+   * Explicit rank order for ordinal α on non-numeric labels.
    */
   labelOrder?: string[];
   /** Parse-derived honesty: rowCount > MAX_ROWS was capped before analysis. */

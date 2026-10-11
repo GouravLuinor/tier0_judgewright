@@ -474,4 +474,119 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     expect(copied).toContain("grade C");
     expect(copied).toMatch(/κ 0\.5192307692307692\d* \[0\.\d+, 0\.\d+\]/);
   });
+
+  // ── The optional opt-in BYOK LLM diagnosis (AC-17/18/38) ───────────────────
+  // It is OFF by default and never automatic: the default compute fires zero
+  // openrouter requests; only a configured key + a click sends exactly one.
+  const diagnosisPanel = (page: import("@playwright/test").Page) =>
+    page.locator('[data-testid="diagnosis-panel"]');
+
+  test("the diagnosis is never automatic — the default compute sends no openrouter requests", async ({
+    page,
+  }) => {
+    let hits = 0;
+    await page.route("**/openrouter.ai/**", async (route) => {
+      hits += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    });
+
+    await fillStable(verdictsInput(page), HEADLINE);
+    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
+      timeout: COMPUTE_TIMEOUT,
+    });
+
+    // The panel is present and off — a real report settles with no BYOK call.
+    await expect(diagnosisPanel(page)).toContainText("1 call, not logged");
+    expect(hits).toBe(0);
+  });
+
+  test("no key ⇒ the button is a configure no-op that sends nothing (AC-17)", async ({
+    page,
+  }) => {
+    let hits = 0;
+    let authorization = "";
+    await page.route("**/openrouter.ai/**", async (route) => {
+      hits += 1;
+      authorization = route.request().headers()["authorization"] ?? "";
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    });
+
+    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
+      timeout: COMPUTE_TIMEOUT,
+    });
+
+    const getButton = page.locator('[data-testid="diagnosis-get"]');
+    await expect(getButton).toHaveText("Configure a key");
+    await getButton.click();
+    // No key ⇒ no request, and the panel stays in the configure-key state.
+    expect(hits).toBe(0);
+    await expect(getButton).toHaveText("Configure a key");
+    expect(authorization).toBe("");
+  });
+
+  test("a key + click sends exactly ONE mocked call and renders the diagnosis (AC-18)", async ({
+    page,
+  }) => {
+    const calls: { authorization: string; body: string }[] = [];
+    await page.route("**/openrouter.ai/**", async (route) => {
+      const request = route.request();
+      calls.push({
+        authorization: request.headers()["authorization"] ?? "",
+        body: request.postData() ?? "",
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  rubric_holes: ["No tie-breaker for near-identical answers."],
+                  bias_flags: ["Favours longer answers."],
+                  misapplications: ["ex-0028"],
+                  priority_fix: "Add an explicit length penalty to the rubric.",
+                }),
+              },
+            },
+          ],
+        }),
+      });
+    });
+
+    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
+      timeout: COMPUTE_TIMEOUT,
+    });
+
+    await page
+      .locator('[data-testid="diagnosis-key-input"]')
+      .fill("sk-or-e2e-only");
+    const getButton = page.locator('[data-testid="diagnosis-get"]');
+    await expect(getButton).toHaveText("Get diagnosis");
+    await getButton.click();
+
+    const result = page.locator('[data-testid="diagnosis-result"]');
+    await expect(result).toBeVisible({ timeout: COMPUTE_TIMEOUT });
+    await expect(result).toContainText("No tie-breaker for near-identical answers.");
+    await expect(result).toContainText("Favours longer answers.");
+    await expect(result).toContainText("Add an explicit length penalty to the rubric.");
+
+    // Exactly one call, Bearer-authenticated, with the disclosed payload only.
+    expect(calls).toHaveLength(1);
+    expect(calls[0].authorization).toBe("Bearer sk-or-e2e-only");
+    expect(calls[0].body).toContain("disagreements");
+
+    // Nothing is persisted: a reload drops the key and the panel is unconfigured.
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
+      timeout: COMPUTE_TIMEOUT,
+    });
+    await expect(page.locator('[data-testid="diagnosis-get"]')).toHaveText(
+      "Configure a key"
+    );
+  });
 });

@@ -21,6 +21,8 @@ import {
   bootstrapTier,
   encodePanel,
 } from "./bootstrapCI.ts";
+import { biasMetrics } from "./biasMetrics.ts";
+import { calibrationPanel } from "./calibration.ts";
 import { chanceBaseline } from "./chanceBaseline.ts";
 import {
   binaryMetrics,
@@ -36,22 +38,10 @@ import { alphaReplicateContext, krippendorffAlpha } from "./krippendorffAlpha.ts
 import { renderReceipt } from "./reportRender";
 import type {
   AlphaLevel,
-  BiasPanel,
   CalibrationReport,
   ComputeOptions,
   RawVerdict,
 } from "./types";
-
-/** The bias panel before its milestone: honestly not computable. */
-const BIAS_SEAM: BiasPanel = {
-  computable: false,
-  missingColumns: ["position", "preferred_longer"],
-  positionBias: null,
-  positionN: 0,
-  verbosityBias: null,
-  verbosityN: 0,
-  note: "Not computable from your input — add position (0/1) and/or preferred_longer.",
-};
 
 /**
  * The D2 calibration report for one session of verdict rows.
@@ -92,8 +82,23 @@ export function computeReport(
   }
 
   const accuracy = n > 0 ? agreementCells / n : 0;
+  // AC-51: the positive class defaults to the second sorted label and is
+  // user-overridable. A STALE override (not among this session's labels) falls
+  // back to the default rather than echoing a binary-metric null.
+  const requestedPositive = options.positiveClass ?? null;
   const positiveClass =
-    options.positiveClass ?? defaultPositiveClass(judgeLabels, humanLabels);
+    requestedPositive !== null && labels.includes(requestedPositive)
+      ? requestedPositive
+      : defaultPositiveClass(judgeLabels, humanLabels);
+
+  // D3 (AC-40): the score-mode semantics + ECE binning. Defaults here so the
+  // pure seam and the worker both resolve them identically.
+  const judgeScoreMode = options.judgeScoreMode ?? "p-positive";
+  const bins =
+    Number.isFinite(options.bins) && (options.bins ?? 10) >= 1
+      ? Math.floor(options.bins as number)
+      : 10;
+  const binMode = options.binMode ?? "width";
 
   // ── Phase A2: κ (unweighted headline + weighted secondary rows) ───────────
   const kappa = cohensKappa(judgeLabels, humanLabels, "unweighted");
@@ -208,8 +213,13 @@ export function computeReport(
     deflation,
     liftOverBaseline,
     ci,
-    calibration: null,
-    bias: BIAS_SEAM,
+    calibration: calibrationPanel(rows, {
+      positiveClass,
+      judgeScoreMode,
+      bins,
+      binMode,
+    }),
+    bias: biasMetrics(rows),
     grade,
     gradeLabel,
     disagreements,

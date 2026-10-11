@@ -25,6 +25,9 @@ import {
 } from "../_lib/reportRender";
 import { useToolStore } from "../_store/useToolStore";
 import type { CalibrationReport } from "../_lib/types";
+import { DiagnosisPanel } from "./DiagnosisPanel";
+import { ExportBar } from "./ExportBar";
+import { BiasReadout, CalibrationReadout } from "./ReportInsights";
 
 /**
  * The report pane: five states, one report card.
@@ -35,9 +38,10 @@ import type { CalibrationReport } from "../_lib/types";
  * the confusion-matrix heat table, the α panel (panel + human ceiling + the
  * mandatory κ-vs-α disclosure), the weighted κ secondary rows, the binary /
  * k-class metrics, the windowed disagreement table and the reproducibility
- * receipt (formula + inputs, so a reviewer can recompute κ). ECE/Brier, the
- * bias panel and the LLM diagnosis are typed seams of the next milestone and
- * are named as such rather than faked.
+ * receipt (formula + inputs, so a reviewer can recompute κ). D3 adds the
+ * ECE/Brier readout (with a score-mode mismatch hint), the position/verbosity
+ * bias panel, the UNgated export bar and the gated opt-in LLM diagnosis - all
+ * honest (not computable says so; the diagnosis never calls the network by default).
  */
 export function ReportPane() {
   const stats = useToolStore((s) => s.stats);
@@ -220,6 +224,7 @@ function ReportCard({
   const heat = useMemo(() => maxCell(report.confusion.matrix), [report]);
 
   return (
+    <>
     <section
       aria-label="Calibration report card"
       className="space-y-4 rounded-xl border border-surface-border bg-surface-subtle/30 p-4"
@@ -639,12 +644,16 @@ function ReportCard({
         </pre>
       </div>
 
-      {/* ── Deferred milestones: typed seams, named not faked ────────────── */}
-      <p className="font-mono text-[10px] leading-relaxed text-zinc-500">
-        ECE/Brier calibration · position &amp; verbosity bias panel · LLM
-        diagnosis — later milestones; typed seams, no fabricated values.
-      </p>
     </section>
+
+    {/* D3: ECE/Brier, the bias panel, exports and the optional diagnosis */}
+    <section aria-label="Calibration insights" className="space-y-3">
+      <CalibrationReadout report={report} />
+      <BiasReadout report={report} />
+      <ExportBar stats={stats} />
+      <DiagnosisPanel />
+    </section>
+    </>
   );
 }
 

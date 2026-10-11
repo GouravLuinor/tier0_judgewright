@@ -17,6 +17,7 @@ import {
 import { Keycap } from "@/components/ui/keycap";
 import { toast } from "@/components/ui/toast";
 import { copyTextToClipboard } from "@/lib/utils";
+import { CalibrationControls } from "./CalibrationControls";
 import {
   AUTO_DIAGNOSIS_ENABLED,
   AUTO_DIAGNOSIS_OFF_COPY,
@@ -134,6 +135,8 @@ export function TopToolbar() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <CalibrationControls />
+
         <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>

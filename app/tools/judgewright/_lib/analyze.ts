@@ -27,8 +27,10 @@ import { computeReport, reportDisagreementWindow } from "./report";
 import type {
   AlphaLevel,
   AnalysisOutcome,
+  BinMode,
   CalibrationReport,
   ComputeEngine,
+  JudgeScoreMode,
   ParseIssue,
   VerdictAnalysis,
 } from "./types";
@@ -48,6 +50,14 @@ export interface AnalyzeOptions {
   alphaLevel?: AlphaLevel;
   /** Explicit rank order for ordinal α on non-numeric labels. */
   labelOrder?: string[];
+  /** Score semantics for ECE/Brier (AC-40; default `p-positive`). */
+  judgeScoreMode?: JudgeScoreMode;
+  /** User-overridable positive class (default = second sorted label). */
+  positiveClass?: string;
+  /** ECE bin count (default 10). */
+  bins?: number;
+  /** ECE binning scheme (default `width`). */
+  binMode?: BinMode;
 }
 
 /** UTF-8 byte length — the honest unit for a paste budget. */
@@ -145,6 +155,10 @@ export function analyzeVerdicts(
       rowCount: parsed.rowCount,
       alphaLevel: options.alphaLevel,
       labelOrder: options.labelOrder,
+      judgeScoreMode: options.judgeScoreMode,
+      positiveClass: options.positiveClass,
+      bins: options.bins,
+      binMode: options.binMode,
     });
 
     const stats: VerdictAnalysis = {

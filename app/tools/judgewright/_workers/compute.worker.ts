@@ -59,7 +59,7 @@ function hashInput(input: WorkerInputPayload): string {
   mix(input.verdictsText);
   mix(`\u0000${input.rubric}`);
   mix(
-    `\u0000${input.settings.seed}:${input.settings.confidenceLevel}`
+    `\u0000${input.settings.seed}:${input.settings.confidenceLevel}:${input.settings.judgeScoreMode}:${input.settings.positiveClass ?? ""}:${(input.settings.labelOrder ?? []).join(",")}`
   );
   return (hash >>> 0).toString(36);
 }
@@ -97,6 +97,9 @@ self.onmessage = (event: MessageEvent<WorkerInputPayload>) => {
           engine: "worker",
           seed: settings.seed,
           confidenceLevel: settings.confidenceLevel,
+          judgeScoreMode: settings.judgeScoreMode,
+          positiveClass: settings.positiveClass,
+          labelOrder: settings.labelOrder,
         });
 
     if (result.ok) {
