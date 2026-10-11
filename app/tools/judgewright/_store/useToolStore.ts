@@ -14,7 +14,8 @@ import {
 import type {
   ComputationResult,
   JudgewrightSettings,
-  PlaceholderStats,
+  ParseIssue,
+  VerdictAnalysis,
 } from "../_lib/types";
 
 /** Screen-reader announcement payload; `seq` keys re-renders of identical text. */
@@ -36,8 +37,16 @@ interface ToolState {
   updateSettings: (patch: Partial<JudgewrightSettings>) => void;
 
   // ── Settled pipeline output (transient) ──────────────────────────────────
-  /** The placeholder report; becomes the full CalibrationReport at M1/M2. */
-  stats: PlaceholderStats | null;
+  /**
+   * The settled analysis: the D1 calibration report plus the honest counts of
+   * the analyzed paste. Never persisted — user content is the only slice.
+   */
+  stats: VerdictAnalysis | null;
+
+  /** First MAX_PARSE_ISSUES parse issues, for the pane's issue list. */
+  parseIssues: ParseIssue[];
+  /** The honest total of skipped-row issues (display caps at five). */
+  parseIssueCount: number;
 
   // ── Processing state & telemetry (transient) ─────────────────────────────
   isProcessing: boolean;
@@ -90,8 +99,9 @@ function settleAnnouncement(result: ComputationResult): string {
   if (!result.stats) {
     return "Analysis settled";
   }
-  const { characterCount, wordCount } = result.stats;
-  return `Analysis settled — ${characterCount.toLocaleString("en-US")} characters, ${wordCount.toLocaleString("en-US")} words`;
+  const { report } = result.stats;
+  const degradedNote = result.degraded ? " (main-thread fallback)" : "";
+  return `Report settled — ${report.n.toLocaleString("en-US")} rows analyzed${degradedNote}`;
 }
 
 export const useToolStore = create<ToolState>()(
@@ -110,6 +120,8 @@ export const useToolStore = create<ToolState>()(
         set((state) => ({ settings: { ...state.settings, ...patch } })),
 
       stats: null,
+      parseIssues: [],
+      parseIssueCount: 0,
 
       isProcessing: false,
       setIsProcessing: (isProcessing) => set({ isProcessing }),
@@ -134,31 +146,37 @@ export const useToolStore = create<ToolState>()(
         set({ statusAnnouncement: nextAnnouncement(message) }),
 
       applyComputation: (result, options) =>
-        set(() =>
-          result.error || !result.ok
-            ? {
-                // A rejection clears the settled output — stale counts from
-                // the previous paste must not survive a failed one.
-                stats: null,
-                degraded: result.degraded,
-                errorMessage: result.error,
-                statusAnnouncement: nextAnnouncement(
-                  `Analysis rejected: ${result.error ?? "unknown error"}`
-                ),
-              }
-            : {
-                stats: result.stats,
-                degraded: result.degraded,
-                errorMessage: null,
-                ...(options?.announce === false
-                  ? {}
-                  : {
-                      statusAnnouncement: nextAnnouncement(
-                        settleAnnouncement(result)
-                      ),
-                    }),
-              }
-        ),
+        set(() => {
+          const failure = result.error ?? (result.ok ? null : "Analysis failed");
+          if (failure !== null || result.stats === null) {
+            // A rejection clears the settled output — stale numbers from
+            // the previous paste must not survive a failed one.
+            return {
+              stats: null,
+              parseIssues: result.issues ?? [],
+              parseIssueCount: result.issueCount ?? 0,
+              degraded: result.degraded,
+              errorMessage: failure,
+              statusAnnouncement: nextAnnouncement(
+                `Analysis rejected: ${failure ?? "unknown error"}`
+              ),
+            };
+          }
+          return {
+            stats: result.stats,
+            parseIssues: result.stats.parse.issues,
+            parseIssueCount: result.stats.parse.issueCount,
+            degraded: result.degraded,
+            errorMessage: null,
+            ...(options?.announce === false
+              ? {}
+              : {
+                  statusAnnouncement: nextAnnouncement(
+                    settleAnnouncement(result)
+                  ),
+                }),
+          };
+        }),
 
       // A true Clear: wipes user content + settled output but preserves the
       // persisted settings and the transient UI-chrome booleans.
@@ -167,6 +185,8 @@ export const useToolStore = create<ToolState>()(
           verdictsText: "",
           rubric: "",
           stats: null,
+          parseIssues: [],
+          parseIssueCount: 0,
           errorMessage: null,
           statusAnnouncement: null,
         }),

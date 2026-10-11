@@ -43,6 +43,11 @@ export const MAX_RUBRIC_CHARS = 8_000;
 export const MAX_TABLE_ROWS = 2_000;
 /** Rows sent to the single opt-in LLM diagnosis (M4). */
 export const DIAGNOSIS_DISAGREEMENT_LIMIT = 25;
+/**
+ * Parse issues DISPLAYED per run (SPEC §2.1.3: the first 5 are listed with
+ * the offending line quoted). `ParseResult.issueCount` stays the honest total.
+ */
+export const MAX_PARSE_ISSUES = 5;
 
 // ── Bootstrap tiers (deterministic; never wall-clock adaptive) ─────────────
 export const BOOTSTRAP_B = 2_000;

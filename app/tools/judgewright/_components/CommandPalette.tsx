@@ -33,6 +33,7 @@ import { Keycap } from "@/components/ui/keycap";
 import { toast } from "@/components/ui/toast";
 import { cn, copyTextToClipboard } from "@/lib/utils";
 import { TOOL_NAME } from "../_lib/constants";
+import { renderOneLineVerdict } from "../_lib/reportRender";
 import { SAMPLE_RUBRIC, SAMPLE_VERDICTS } from "../_lib/presets";
 import { useToolStore } from "../_store/useToolStore";
 import { useAuthPromptStore } from "../_store/useAuthPromptStore";
@@ -90,13 +91,19 @@ export function CommandPalette() {
       });
       return;
     }
-    void copyTextToClipboard(stats.echo).then((succeeded) => {
-      if (succeeded) {
-        toast({ title: "Verdicts copied", description: "the analyzed paste" });
-      } else {
-        toast({ title: "Copy failed", variant: "destructive" });
+    // Mirrors ⌘⇧C exactly: the one-line verdict, never the analyzed paste.
+    void copyTextToClipboard(renderOneLineVerdict(stats.report)).then(
+      (succeeded) => {
+        if (succeeded) {
+          toast({
+            title: "Verdict copied",
+            description: "the one-line verdict",
+          });
+        } else {
+          toast({ title: "Copy failed", variant: "destructive" });
+        }
       }
-    });
+    );
   }, []);
 
   const handleToggleTheme = useCallback(() => {

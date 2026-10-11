@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { copyTextToClipboard } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
+import { renderOneLineVerdict } from "../_lib/reportRender";
 import { useToolStore } from "../_store/useToolStore";
 
 /**
@@ -42,13 +43,19 @@ export function useKeyboardShortcuts() {
       if (key === "c" && e.shiftKey) {
         if (!stats) return;
         e.preventDefault();
-        void copyTextToClipboard(stats.echo).then((succeeded) => {
-          if (succeeded) {
-            toast({ title: "Verdicts copied", description: "the analyzed paste" });
-          } else {
-            toast({ title: "Copy failed", variant: "destructive" });
+        // ⌘⇧C ships the ONE-LINE verdict: judging-the-judge in a single line.
+        void copyTextToClipboard(renderOneLineVerdict(stats.report)).then(
+          (succeeded) => {
+            if (succeeded) {
+              toast({
+                title: "Verdict copied",
+                description: "the one-line verdict",
+              });
+            } else {
+              toast({ title: "Copy failed", variant: "destructive" });
+            }
           }
-        });
+        );
         return;
       }
 

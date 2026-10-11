@@ -42,23 +42,31 @@ milestone inherits it unchanged.
 
 ```ts
 analyzeVerdicts(verdictsText, { deadlineMs, engine }) => AnalysisOutcome
-// { ok: true, stats: PlaceholderStats } | { ok: false, error: string }
+// { ok: true, stats: VerdictAnalysis } | { ok: false, error: string, issues: ParseIssue[] }
 ```
 
-Today it computes character / word / byte / line counts plus an echo. The statistics milestone
-replaces the **body** — never the signature — with:
+D1 landed: the seam parses verdicts (`_lib/parse.ts` + `_lib/csv.ts`), normalizes the label
+vocabulary (`_lib/labels.ts`), builds the confusion matrix and the binary / k-class metrics
+(`_lib/confusionMatrix.ts`), computes the UNWEIGHTED Cohen's κ through the integer-rational
+fast form `(A·n − S)/(n² − S)` (`_lib/cohensKappa.ts`), derives the always-majority chance
+baseline (`_lib/chanceBaseline.ts`) and renders the report and its receipt
+(`_lib/report.ts` + `_lib/reportRender.ts`). The remaining statistics are typed `null` seams
+owned by later milestones:
 
 ```
-parseVerdicts() → buildMatrix() → cohensKappa() → krippendorffAlpha()
-→ establishment() → bootstrapCIs() → grade() → computeReport()
+[landed] parseVerdicts() → buildMatrix() → cohensKappa() → chanceBaseline()
+        → binaryMetrics()/multiclassMetrics() → computeReport() → receipt
+[D2]    krippendorffAlpha() → bootstrapCIs() → grade()          (typed seams already in the report)
+[D3]    biasMetrics() → ece()/brier() → disagreements window
 ```
 
 The envelope, the worker, the hook, the store and the report card all survive that swap
 untouched. That is the entire point of the seam.
 
-**Why an echo at all?** It is the honest "proof of life" for the shell: the pane mirrors back
-exactly what it analyzed, so the paste → worker → render leg of the journey is observable end
-to end before any real statistic exists. The real report card replaces it; nothing else moves.
+**What replaced the echo:** the honest paste counts (characters / words / bytes / lines of the
+WHOLE paste) ride along in `VerdictAnalysis` beside the report, so the status strip and the
+pane's count tiles keep their contract; the pane's proof-of-life is now the report card itself
+— raw agreement, the unweighted κ, the chance baseline and the reproducibility receipt.
 
 ## 4. State model — `_store/useToolStore.ts`
 
@@ -105,8 +113,8 @@ agreement.
 | `PlaceholderStats` | `CalibrationReport` (`CalibrationReportSeam` in `types.ts` is the starting shape) | Receipt fields: n, rowCount, seed, B, budget, budgetAborts, engine, computeMs, artifactCacheState. |
 | `_lib/constants.ts` | `_lib/limits.ts` (rename optional) | Same file, same values — the import site does not move. |
 | `_hooks/useToolWorker.ts` | `_hooks/useJudgewrightWorker.ts` | The checkpoint guard (`useSyncExternalStore`) is added here with a `/r` key. |
-| `stats: \| null` | `report: \| null` | Only the field name changes; `applyComputation` stays. |
-| Report card placeholder | Full report card | Already in place, already titled, already honest. |
+| `stats: VerdictAnalysis \| null` | carries `report: CalibrationReport` + the honest paste counts | Only the field name changes; `applyComputation` stays. |
+| Report card placeholder | Full report card (D1 headline: agreement · κ · baseline · receipt) | Landed in D1; the α / CI / grade / ECE / bias / disagreement rows are named seams. |
 
 ## 8. Testing strategy
 

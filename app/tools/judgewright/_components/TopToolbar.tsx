@@ -22,6 +22,7 @@ import {
   AUTO_DIAGNOSIS_OFF_COPY,
 } from "../_lib/constants";
 import { SAMPLE_RUBRIC, SAMPLE_VERDICTS } from "../_lib/presets";
+import { renderOneLineVerdict } from "../_lib/reportRender";
 import { useToolStore } from "../_store/useToolStore";
 
 /**
@@ -49,15 +50,9 @@ export function TopToolbar() {
 
   const handleCopy = async () => {
     const current = useToolStore.getState();
+    // ⌘⇧C ships the one-line verdict; this button mirrors the chord exactly.
     const summary = current.stats
-      ? [
-          `Judgewright placeholder report`,
-          `characters: ${current.stats.characterCount}`,
-          `words: ${current.stats.wordCount}`,
-          `bytes: ${current.stats.byteCount}`,
-          `lines: ${current.stats.lineCount}`,
-          `engine: ${current.stats.engine}`,
-        ].join("\n")
+      ? renderOneLineVerdict(current.stats.report)
       : "";
 
     if (!summary) {
@@ -71,7 +66,10 @@ export function TopToolbar() {
 
     const succeeded = await copyTextToClipboard(summary);
     if (succeeded) {
-      toast({ title: "Report copied", description: "placeholder report card" });
+      toast({
+        title: "Verdict copied",
+        description: "the one-line verdict",
+      });
     } else {
       toast({ title: "Copy failed", variant: "destructive" });
     }

@@ -1,34 +1,45 @@
 /**
- * Judgewright — placeholder compute core (the pure seam for statistics).
+ * Judgewright — the analysis seam (SPEC §4 / BAR §4.2).
  *
- * This is the scaffold's single source of semantics: the Web Worker and the
- * synchronous main-thread fallback BOTH call `analyzeVerdicts`, so the two
- * paths cannot drift (BAR §4.2). Today it computes a deliberately trivial
- * placeholder measurement — character / word / byte / line counts plus an
- * echo of the analyzed text — which is enough to prove the whole pipeline
- * (paste → worker → render → copy) end to end.
+ * `analyzeVerdicts` is the ONE function the Web Worker and the synchronous
+ * main-thread fallback both call, so the two paths cannot drift. It owns the
+ * pipeline: capacity check → `parseVerdicts` → hard-error envelopes →
+ * `computeReport`. The statistics themselves live in `_lib/report.ts` and its
+ * siblings; this module is orchestration only, and it stays pure (no React, no
+ * DOM, no IO) so the worker, the hook, the store and the UI keep working
+ * untouched when the core grows (BAR §4.4).
  *
- * The statistics milestone (PLAN M1/M2) replaces the body with
- * `parseVerdicts()` → `confusionMatrix()` → `cohensKappa()` → … →
- * `computeReport()` and keeps this exact signature, so the worker, the hook,
- * the store and the UI keep working untouched. Errors stay VALUES, never
- * throws (BAR §4.4).
+ * Errors are VALUES (`ok: false`), never throws. All-rows-invalid settles the
+ * FM-17 envelope with `report === null` — never a zero-filled report — and the
+ * hard parse errors (mixed vocabularies, capacity, ambiguity) settle their own
+ * verbatim copy with the first issues attached.
  */
 
 import {
-  ECHO_LIMIT_CHARS,
+  DEFAULT_CONFIDENCE_LEVEL,
+  DEFAULT_SEED,
   MAX_INPUT_CHARS,
+  MAX_PARSE_ISSUES,
   WORKER_DEADLINE_MS,
 } from "./constants";
-import type { AnalysisOutcome, ComputeEngine } from "./types";
+import { parseVerdicts } from "./parse";
+import { computeReport } from "./report";
+import type {
+  AnalysisOutcome,
+  ComputeEngine,
+  ParseIssue,
+  VerdictAnalysis,
+} from "./types";
 
 export interface AnalyzeOptions {
   /** Cooperative budget: worker 1,000 ms · sync fallback 800 ms. */
   deadlineMs?: number;
+  /** Bootstrap seed — echoed in the receipt; deterministic once M2 lands. */
+  seed?: number;
+  /** Confidence level the CI panel will report (echoed in the receipt). */
+  confidenceLevel?: number;
   /** Paste ceiling override for tests. */
   maxInputChars?: number;
-  /** How much of the paste the echo panel mirrors back. */
-  echoLimitChars?: number;
   /** Which engine is running — stamped into the result, never guessed. */
   engine?: ComputeEngine;
 }
@@ -51,20 +62,24 @@ export function countLines(text: string): number {
   return text.split("\n").length;
 }
 
+/** First `MAX_PARSE_ISSUES` issues, for the display list. */
+function leadingIssues(issues: readonly ParseIssue[]): ParseIssue[] {
+  return issues.slice(0, MAX_PARSE_ISSUES);
+}
+
 /**
- * Trivial-but-real placeholder analysis of a pasted verdict set.
- *
- * @returns either the placeholder stats (`ok: true`) or a friendly,
- *          user-facing error value (`ok: false`) — never a throw.
+ * Analyzes a pasted verdict set and settles either the D1 calibration report
+ * or a friendly error value.
  */
 export function analyzeVerdicts(
   verdictsText: string,
   options: AnalyzeOptions = {}
 ): AnalysisOutcome {
   const deadlineMs = options.deadlineMs ?? WORKER_DEADLINE_MS;
-  const maxInputChars = options.maxInputChars ?? MAX_INPUT_CHARS;
-  const echoLimitChars = options.echoLimitChars ?? ECHO_LIMIT_CHARS;
   const engine: ComputeEngine = options.engine ?? "worker";
+  const maxInputChars = options.maxInputChars ?? MAX_INPUT_CHARS;
+  const seed = options.seed ?? DEFAULT_SEED;
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_CONFIDENCE_LEVEL;
   const startedAt = Date.now();
 
   if (verdictsText.length > maxInputChars) {
@@ -72,32 +87,82 @@ export function analyzeVerdicts(
     return {
       ok: false,
       error: `Input is ${verdictsText.length.toLocaleString("en-US")} characters — the limit is ${maxInputChars.toLocaleString("en-US")}.`,
+      issues: [],
+      issueCount: 0,
     };
   }
 
-  // Cooperative deadline: the placeholder compute is far cheaper than the
-  // budget, but the seam stays so the statistics milestone inherits it.
-  const elapsedMs = Date.now() - startedAt;
-  if (elapsedMs > deadlineMs) {
+  if (verdictsText.trim().length === 0) {
     return {
       ok: false,
-      error: `Analysis exceeded the ${deadlineMs} ms budget — point statistics are unaffected.`,
+      error: "Nothing to analyze yet — paste verdicts as JSONL or CSV.",
+      issues: [],
+      issueCount: 0,
     };
   }
 
-  const echo = verdictsText.slice(0, echoLimitChars);
+  const parsed = parseVerdicts(verdictsText);
 
-  return {
-    ok: true,
-    stats: {
+  // A fatal parse (mixed vocabularies, capacity, single-column input,
+  // ambiguity on an id/label slot) settles its OWN verbatim copy: no partial
+  // report is ever built from it (SPEC §2.1.8 "hard" column).
+  if (parsed.fatal && parsed.verdicts.length === 0) {
+    return {
+      ok: false,
+      error: parsed.issues[0]?.reason ?? "The input could not be parsed.",
+      issues: leadingIssues(parsed.issues),
+      issueCount: parsed.issueCount,
+    };
+  }
+
+  if (parsed.verdicts.length === 0) {
+    // FM-17: every row failed validation — report === null, never zero-filled.
+    return {
+      ok: false,
+      error:
+        "No usable rows — every row failed validation. Fix the first issue and try again.",
+      issues: leadingIssues(parsed.issues),
+      issueCount: parsed.issueCount,
+    };
+  }
+
+  try {
+    const report = computeReport(parsed.verdicts, {
+      seed,
+      confidenceLevel,
+      deadlineMs,
+      engine,
+      truncated: parsed.capped,
+      rowCount: parsed.rowCount,
+    });
+
+    const stats: VerdictAnalysis = {
+      report,
+      parse: {
+        format: parsed.format,
+        rowCount: parsed.rowCount,
+        capped: parsed.capped,
+        issues: leadingIssues(parsed.issues),
+        issueCount: parsed.issueCount,
+        warnings: parsed.warnings,
+      },
       characterCount: verdictsText.length,
       wordCount: countWords(verdictsText),
       byteCount: countBytes(verdictsText),
       lineCount: countLines(verdictsText),
-      echo,
-      echoTruncated: verdictsText.length > echoLimitChars,
       executionTimeMs: Math.max(0, Date.now() - startedAt),
       engine,
-    },
-  };
+    };
+
+    return { ok: true, stats };
+  } catch {
+    // Last-resort envelope (BAR §4.4): a friendly value, never a raw stack.
+    return {
+      ok: false,
+      error:
+        "The report could not be computed from this input. Check the first issue below and try again.",
+      issues: leadingIssues(parsed.issues),
+      issueCount: parsed.issueCount,
+    };
+  }
 }

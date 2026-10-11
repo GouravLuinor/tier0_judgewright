@@ -140,7 +140,7 @@ export function useToolWorker() {
         const stats = useToolStore.getState().stats;
         announceStatus(
           stats
-            ? `Analysis settled — ${stats.characterCount.toLocaleString("en-US")} characters`
+            ? `Report settled — ${stats.report.n.toLocaleString("en-US")} rows analyzed`
             : "Analysis settled"
         );
       }, SUCCESS_ANNOUNCE_DEBOUNCE_MS);
@@ -265,6 +265,8 @@ export function useToolWorker() {
         const result = analyzeVerdicts(inputRef.current.verdictsText, {
           deadlineMs: SYNC_DEADLINE_MS,
           engine: "main-thread",
+          seed: inputRef.current.settings.seed,
+          confidenceLevel: inputRef.current.settings.confidenceLevel,
         });
         if (id !== requestIdRef.current) return;
         setIsProcessing(false);
@@ -273,6 +275,8 @@ export function useToolWorker() {
           error: result.ok ? null : result.error,
           degraded: true,
           stats: result.ok ? result.stats : null,
+          issues: result.ok ? [] : result.issues,
+          issueCount: result.ok ? 0 : result.issueCount,
         });
       } catch (err) {
         clearSuccessAnnouncement();

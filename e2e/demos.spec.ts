@@ -89,8 +89,14 @@ test.describe("Judgewright live-compute demos", () => {
   test("a large payload takes the adaptive debounce tier and still settles", async ({
     page,
   }) => {
-    // >5,000 characters trips the 40ms debounce tier; the counts must be exact.
-    const big = "x".repeat(6_000);
+    // >5,000 characters trips the 40ms debounce tier. The fixture is a real
+    // verdict paste: 60 rows of 100 characters settle the report card.
+    const row =
+      '{"example_id":"big-000001","judge_label":"pass","human_label":"pass"}';
+    const big = Array.from({ length: 60 }, (_, i) =>
+      row.replace("big-000001", `big-${String(i).padStart(6, "0")}`)
+    ).join("\n");
+
     await fillStable(verdictsInput(page), big);
 
     await expect(reportState(page)).toHaveAttribute(
@@ -98,13 +104,23 @@ test.describe("Judgewright live-compute demos", () => {
       "ready",
       { timeout: COMPUTE_TIMEOUT }
     );
-    await expect(statValue(page, "characters")).toHaveText("6,000", {
+
+    // The paste is uniform, so agreement is 100% and every row agrees.
+    await expect(statValue(page, "characters")).toHaveText(
+      big.length.toLocaleString("en-US"),
+      { timeout: COMPUTE_TIMEOUT }
+    );
+    await expect(statValue(page, "lines")).toHaveText("60", {
       timeout: COMPUTE_TIMEOUT
     });
-
-    // The echo is capped and flagged, while the counts still describe the whole
-    // paste.
-    await expect(station(page).getByText(/echo of the analyzed paste/i)).toBeVisible();
+    await expect(
+      station(page).locator('[data-stat="agreement"] dd').first()
+    ).toHaveText("100.0%");
+    // A single-label session has no label variance, so κ is honestly
+    // undefined rather than fabricated.
+    await expect(
+      station(page).locator('[data-kappa="undefined"]')
+    ).toContainText(/κ is undefined/i);
   });
 
   test("theme toggle flips <html class> between light and dark", async ({
@@ -145,8 +161,11 @@ test.describe("Judgewright live-compute demos", () => {
     // The success toast wears the one accent (BAR §2.5), not a neutral card.
     await expect(toast).toHaveClass(/text-brand-lime/);
 
+    // The chord ships the ONE-LINE verdict: n, accuracy, κ, baseline.
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clipboard).toBe(PAYLOAD);
+    expect(clipboard).toContain("2 rows");
+    expect(clipboard).toContain("acc 50.0%");
+    expect(clipboard).toContain("always-majority 100.0%");
   });
 
   test("copy failure surfaces the rose toast", async ({ page }) => {
@@ -237,7 +256,7 @@ test.describe("Judgewright live-compute demos", () => {
     });
   });
 
-  test("clear: wipes the paste and settles a zeroed report instead of stale numbers", async ({
+  test("clear: wipes the paste and settles an honest empty state", async ({
     page,
   }) => {
     await fillStable(verdictsInput(page), PAYLOAD);
@@ -253,17 +272,18 @@ test.describe("Judgewright live-compute demos", () => {
     await station(page).getByRole("button", { name: /clear/i }).click();
 
     await expect(verdictsInput(page)).toHaveValue("");
+    // An empty paste settles the honest error value — never stale numbers,
+    // and never a zero-filled report.
     await expect(reportState(page)).toHaveAttribute(
       "data-report-state",
-      "ready",
+      "error",
       { timeout: COMPUTE_TIMEOUT }
     );
-    // No stale counts survive a clear — an empty paste is honestly zeroed.
-    await expect(statValue(page, "characters")).toHaveText("0", {
-      timeout: COMPUTE_TIMEOUT
-    });
-    await expect(statValue(page, "words")).toHaveText("0", {
-      timeout: COMPUTE_TIMEOUT
+    await expect(page.locator("#report-error-message")).toContainText(
+      "Nothing to analyze yet"
+    );
+    await expect(page.locator("[data-stat]")).toHaveCount(0, {
+      timeout: COMPUTE_TIMEOUT,
     });
   });
 

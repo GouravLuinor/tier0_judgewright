@@ -14,6 +14,7 @@ const TOOL_URL = "/tools/judgewright";
 
 /** Bounds for the off-main-thread debounce + first settle (generous). */
 const COMPUTE_TIMEOUT = 15_000;
+const BOUNDED_TIMEOUT = 10_000;
 
 /** Platform-agnostic modifier for ⌘K/Ctrl+K (resolves to Control on Linux). */
 const MOD = "ControlOrMeta";
@@ -122,22 +123,64 @@ test.describe("Judgewright shell journeys", () => {
     // The engine badge proves the result came back through the Web Worker.
     await expect(station(page).getByText("worker", { exact: true })).toBeVisible();
 
-    // The deferred calibration card is an explicit placeholder, not a lie.
+    // The seeded fixture is 12 binary rows, 9 agreements / 3 disagreements.
+    // Human marginals 9/3, judge marginals 8/4 ⇒ A=9, S=84, κ = (9·12−84)/(12²−84)
+    // = 0.4, raw agreement 75.0%, always-majority baseline 75.0% — the Δκ
+    // deflation of 0.35 (35.0 pp) is visible in the headline.
+    const card = page.getByRole("region", {
+      name: /calibration report card/i,
+    });
+    await expect(card).toBeVisible();
+    await expect(card).toContainText("raw agreement");
+    await expect(card).toContainText("unweighted κ");
+    await expect(card).toContainText("chance baseline");
     await expect(
-      station(page).getByText(/Calibration report card — compute enabled in next milestone/i)
-    ).toBeVisible();
+      card,
+      "the chance baseline names its own construction"
+    ).toContainText(
+      "always-majority on this label distribution = 75.0%"
+    );
+    await expect(
+      page.locator('[data-stat="agreement"] dd').first()
+    ).toHaveText("75.0%");
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText(
+      "0.40000000000000002"
+    );
+    await expect(page.locator('[data-stat="baseline"] dd').first()).toHaveText(
+      "75.0%"
+    );
+    await expect(page.locator("[data-deflation]")).toContainText(
+      "Δκ = 0.34999999999999998"
+    );
+    await expect(page.locator("[data-deflation]")).toContainText("35.0 pp");
   });
 
-  test("worker round trip: a paste settles matching character, word, byte and line counts", async ({
+  test("worker round trip: a known JSONL fixture settles the pinned headline", async ({
     page,
+    context,
   }) => {
-    const payload = "alpha beta gamma\ndelta epsilon zeta\neta";
-    const expectedBytes = await page.evaluate(
-      (text) => new TextEncoder().encode(text).length,
-      payload
-    );
+    // The AC-10 headline fixture: 1,000 binary verdicts with a=920, b=30,
+    // c=20, d=30; human marginals 940/60, judge marginals 950/50.
+    const rows = [
+      ...Array.from(
+        { length: 920 },
+        () => '{"example_id":"i","judge_label":"P","human_label":"P"}'
+      ),
+      ...Array.from(
+        { length: 30 },
+        () => '{"example_id":"i","judge_label":"P","human_label":"N"}'
+      ),
+      ...Array.from(
+        { length: 20 },
+        () => '{"example_id":"i","judge_label":"N","human_label":"P"}'
+      ),
+      ...Array.from(
+        { length: 30 },
+        () => '{"example_id":"i","judge_label":"N","human_label":"N"}'
+      ),
+    ].join("\n");
 
-    await fillStable(verdictsInput(page), payload);
+    await page.locator("#tool-verdicts-input").fill(rows);
 
     // Web-first assertions: the pane re-settles inside its own debounce tier,
     // so the assert retries until the NEW numbers land.
@@ -151,24 +194,48 @@ test.describe("Judgewright shell journeys", () => {
       timeout: COMPUTE_TIMEOUT,
     });
 
+    // The report card shows the expected agreement / κ / chance baseline.
+    await expect(
+      page.locator('[data-stat="agreement"] dd').first()
+    ).toHaveText("95.0%");
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText(
+      "0.51923076923076927"
+    );
+    await expect(page.locator('[data-stat="baseline"] dd').first()).toHaveText(
+      "94.0%"
+    );
+    await expect(page.locator("[data-deflation]")).toContainText("43.1 pp");
+
+    // The honest paste counts still describe the whole paste.
     await expect(statValue(page, "characters")).toHaveText(
-      String(payload.length),
+      rows.length.toLocaleString("en-US"),
       { timeout: COMPUTE_TIMEOUT }
     );
-    await expect(statValue(page, "words")).toHaveText("7", {
-      timeout: COMPUTE_TIMEOUT,
-    });
-    await expect(statValue(page, "lines")).toHaveText("3", {
-      timeout: COMPUTE_TIMEOUT,
-    });
-    await expect(statValue(page, "bytes")).toHaveText(String(expectedBytes), {
+    await expect(statValue(page, "lines")).toHaveText("1,000", {
       timeout: COMPUTE_TIMEOUT,
     });
 
-    // The pane mirrors the analyzed paste verbatim.
-    await expect(station(page).getByText(payload).first()).toBeVisible({
-      timeout: COMPUTE_TIMEOUT,
-    });
+    // The receipt shows the formula inputs a reviewer can recompute from.
+    const receipt = page.locator("[data-receipt]");
+    await expect(receipt).toContainText("κ = (A·n − S) / (n² − S)");
+    await expect(receipt).toContainText("n = 1000");
+    await expect(receipt).toContainText("A = 950");
+    await expect(receipt).toContainText("S = 896000");
+    await expect(receipt).toContainText("A·n − S = 54000");
+    await expect(receipt).toContainText("n² − S = 104000");
+
+    // ⌘⇧C copies the one-line verdict at 17 significant digits.
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.keyboard.press(`${MOD}+Shift+C`);
+    const toast = page.locator('[data-toast-variant="success"]');
+    await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
+    await expect(toast).toContainText(/copied/i);
+
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain("1,000 rows");
+    expect(clipboard).toContain("acc 95.0%");
+    expect(clipboard).toContain("κ 0.51923076923076927");
+    expect(clipboard).toContain("always-majority 94.0%");
   });
   test("rubric pane persists beside the verdicts", async ({ page }) => {
     const rubric = page.locator("#tool-rubric-input");

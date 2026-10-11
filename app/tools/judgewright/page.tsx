@@ -179,9 +179,11 @@ export default function ToolPage() {
                 <span aria-hidden="true">•</span>
                 <span className="hidden sm:inline">
                   <strong className="tabular-nums text-brand-lime">
-                    {stats ? stats.wordCount.toLocaleString("en-US") : "—"}
+                    {stats?.report.kappa === null || stats?.report.kappa === undefined
+                      ? "undefined"
+                      : stats.report.kappa.toPrecision(17)}
                   </strong>{" "}
-                  words
+                  κ
                 </span>
                 <span aria-hidden="true">•</span>
                 <span>
