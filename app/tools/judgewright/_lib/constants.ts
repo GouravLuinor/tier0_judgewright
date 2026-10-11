@@ -35,7 +35,18 @@ export const STORAGE_VERSION = 1;
 export const MAX_ROWS = 200_000;
 /** Header sanity — more than this is a `capacity` parse error. */
 export const MAX_COLS = 64;
-/** 40 MB paste ceiling; beyond → clear error, nothing parsed. */
+/**
+ * 40 MB paste ceiling; beyond → clear error, nothing parsed.
+ *
+ * A16 — the A16 capacity interaction, disclosed here because it is a property
+ * of the two caps ABOVE: MAX_ROWS (200,000) and MAX_INPUT_CHARS (40,000,000)
+ * multiply. A row that carries a judge critique is ~205 characters, so 200,000
+ * critique-bearing rows ≈ 41 MB — just past the character limit. The two caps
+ * therefore NEVER both bind: the REAL row capacity of a critique-bearing
+ * session is ≈190,000 rows (40 MB ÷ ~205 chars), not the 200,000 MAX_ROWS
+ * advertises. A paste that large is rejected by the character limit with its
+ * true size named, never silently truncated to 200,000 rows.
+ */
 export const MAX_INPUT_CHARS = 40_000_000;
 /** Rubric pane cap (SPEC §2.1.7). */
 export const MAX_RUBRIC_CHARS = 8_000;
@@ -43,6 +54,28 @@ export const MAX_RUBRIC_CHARS = 8_000;
 export const MAX_TABLE_ROWS = 2_000;
 /** Rows sent to the single opt-in LLM diagnosis (M4). */
 export const DIAGNOSIS_DISAGREEMENT_LIMIT = 25;
+
+/**
+ * A11 — the per-field excerpt cap on the transmitted diagnosis request. A
+ * judge session may legally carry multi-megabyte `judge_critique` /
+ * `judge_input` / `judge_output` cells (the caps above permit them), so
+ * shipping them verbatim would build a request measured in HUNDREDS OF MB
+ * (25 rows × 4 fields × 40 MB) — a self-inflicted DoS on the user's own pane
+ * and a request no provider accepts. Each field is excerpted to this length
+ * with an ellipsis marker, and the disclosed payload shows EXACTLY what is
+ * sent, so the excerpt is visible rather than silent.
+ */
+export const DIAGNOSIS_EXCERPT_CHARS = 2_000;
+
+/**
+ * A11 — the response cap. The curated arrays are rejected with a `format`
+ * error beyond this many entries, so a hostile or broken model cannot return
+ * a response that freezes the pane while it renders (or floods it).
+ */
+export const DIAGNOSIS_MAX_ARRAY_ITEMS = 32;
+
+/** A11 — the per-string cap inside a curated response array. */
+export const DIAGNOSIS_MAX_STRING_CHARS = 2_000;
 /**
  * Parse issues DISPLAYED per run (SPEC §2.1.3: the first 5 are listed with
  * the offending line quoted). `ParseResult.issueCount` stays the honest total.
@@ -83,6 +116,16 @@ export const WORKER_DEADLINE_MS = 1_000;
 export const SYNC_DEADLINE_MS = 800;
 /** Hard wall-clock before terminate + respawn. */
 export const WATCHDOG_MS = 1_500;
+
+/**
+ * A10 — how often the parse loop re-reads the wall clock. SYNC_DEADLINE_MS
+ * (like WORKER_DEADLINE_MS) used to govern ONLY `computeReport`, so the parse
+ * that runs BEFORE it was unbounded: a pathological paste could hold the main
+ * thread for as long as it liked. The parse loop now carries the SAME absolute
+ * budget and checks it every N rows, so the clock is read O(rows / N) times
+ * instead of once per row (the amortized-cadence pattern of BAR §4.4).
+ */
+export const PARSE_DEADLINE_CHECK_ROWS = 512;
 /**
  * A2 — the watchdog budget is TIERED by dispatch size. The 1.5s wall is right
  * for a small paste, but an in-cap 200k-row dispatch legitimately needs

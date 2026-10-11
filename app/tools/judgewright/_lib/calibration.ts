@@ -47,6 +47,16 @@ export const CALIBRATION_MISMATCH_THRESHOLD = 0.05;
 /** FM-3: the honest reason when no numeric scores are present. */
 export const CALIBRATION_NOT_COMPUTABLE_REASON = "not computable — no numeric scores";
 
+/**
+ * A12: the honest reason when two columns map to `judge_score`. The score
+ * column no longer has ONE meaning, so ECE and Brier would be computed from
+ * whichever alias the parser happened to resolve — a confident number built on
+ * an ambiguous column. The panel therefore reports NOT COMPUTABLE, never a
+ * fabricated 0 and never a silent pick (FM-3 / FM-12).
+ */
+export const CALIBRATION_AMBIGUOUS_REASON =
+  "not computable — two columns map to judge_score; rename one so the score has a single meaning";
+
 /** A judge_score is usable only as a finite probability in `[0, 1]`. */
 function usableScore(value: number | null): value is number {
   return value !== null && Number.isFinite(value) && value >= 0 && value <= 1;
@@ -171,6 +181,12 @@ export function brier(
 export interface CalibrationResolveOptions {
   /** The positive class; `null` means the input has no positive class yet. */
   positiveClass: string | null;
+  /**
+   * A12 — TRUE when the parser found two columns mapped to `judge_score`. The
+   * panel is then not computable: the resolved per-row `p` would depend on
+   * which of the two columns won, so no ECE/Brier figure is honest.
+   */
+  judgeScoreAmbiguous?: boolean;
   /** Which score semantics to resolve the per-row positive probability with. */
   judgeScoreMode: JudgeScoreMode;
   /** Bin count for ECE (equal-width default 10). */
@@ -191,8 +207,30 @@ export function calibrationPanel(
   rows: readonly RawVerdict[],
   options: CalibrationResolveOptions
 ): CalibrationPanel | null {
-  const { positiveClass, judgeScoreMode, bins, binMode } = options;
+  const { positiveClass, judgeScoreMode, bins, binMode, judgeScoreAmbiguous } =
+    options;
   if (positiveClass === null) return null;
+
+  // A12: an ambiguous score column is a HARD stop, not a soft warning. The
+  // resolution, the two-mode comparison and the ECE/Brier arithmetic below
+  // all assume one meaning for `judge_score`; with two claimants the panel
+  // says so and returns nothing fabricated (this replaces computing anyway
+  // from whichever alias happened to be resolved first).
+  if (judgeScoreAmbiguous === true) {
+    return {
+      ece: null,
+      brier: null,
+      bins,
+      mode: binMode,
+      scoreMode: judgeScoreMode,
+      positiveClass,
+      mismatchWarning: null,
+      ambiguousReason: CALIBRATION_AMBIGUOUS_REASON,
+      reason: CALIBRATION_AMBIGUOUS_REASON,
+      scoreCount: 0,
+      computable: false,
+    };
+  }
 
   // Resolve both modes against the same outcome so the mismatch detector can
   // compare them without recomputing resolution a second time.

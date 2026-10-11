@@ -14,8 +14,6 @@ import { DECLARED_ORIGINS } from "./app/tools/judgewright/_lib/constants";
 //   · openrouter.ai: the ONE opt-in BYOK diagnosis call, never automatic
 // The default path therefore contacts nothing beyond its own origin, and the
 // e2e request guard (AC-20) proves it by failing on any non-localhost request.
-// - googleusercontent / githubusercontent exist solely to render OAuth
-//   provider avatars.
 // - unsafe-inline styles are required by Next's runtime CSS and the
 //   next-themes no-flash boot script.
 // - worker-src covers the compute Web Worker pipeline (same-origin chunks;
@@ -28,7 +26,14 @@ const csp = [
   // eval. Production carries inline-only.
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.githubusercontent.com",
+  // A7: images come from this origin only, plus the two inline schemes the UI
+  // itself produces (data: URI favicon/exports, blob: object-URL downloads).
+  // The OAuth-avatar hosts that used to sit here are GONE: they are not in
+  // DECLARED_ORIGINS (the one documented list `connect-src` is built from),
+  // nothing in the app fetches an avatar from them, and an unused allow-list
+  // entry is an egress path with no owner — exactly what `csp.test.ts` now
+  // forbids by asserting `img-src` never drifts past DECLARED_ORIGINS ∪ schemata.
+  "img-src 'self' data: blob:",
   "font-src 'self' data:",
   `connect-src ${DECLARED_ORIGINS.join(" ")}`,
   "worker-src 'self' blob:",

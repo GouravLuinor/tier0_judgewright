@@ -150,6 +150,59 @@ describe("parseVerdicts — JSONL happy path", () => {
   });
 });
 
+describe("parseVerdicts — the BOM (A6)", () => {
+  const JSONL_TWO = [
+    '{"example_id":"ex-001","judge_label":"pass","human_label":"pass"}',
+    '{"example_id":"ex-002","judge_label":"fail","human_label":"pass"}',
+  ].join("\n");
+
+  it("strips the BOM on the JSONL path, so the first row survives", () => {
+    // Before A6 the BOM sat in front of the `{`: `detectFormat` read the line
+    // as NOT starting with `{`, so the paste was sniffed as CSV and died on
+    // the single-column structure check — every row lost to one byte.
+    const bom = parseVerdicts(`\uFEFF${JSONL_TWO}`);
+    const plain = parseVerdicts(JSONL_TWO);
+
+    expect(bom.format).toBe("jsonl");
+    expect(bom.fatal).toBe(false);
+    expect(bom.issues).toEqual([]);
+    expect(bom.verdicts.map((row) => row.exampleId)).toEqual(["ex-001", "ex-002"]);
+    expect(bom.rowCount).toBe(2);
+    // Byte-identical to the un-prefixed paste: stripping is invisible.
+    expect(bom.verdicts).toEqual(plain.verdicts);
+  });
+
+  it("a BOM + CRLF JSONL paste keeps its line numbers and every row", () => {
+    const result = parseVerdicts(`\uFEFF${JSONL_TWO.replace(/\n/g, "\r\n")}`);
+    expect(result.format).toBe("jsonl");
+    expect(result.verdicts).toHaveLength(2);
+    expect(result.verdicts[1]?.lineNumber).toBe(2);
+    expect(result.verdicts[0]?.exampleId).toBe("ex-001");
+  });
+
+  it("strips at most ONE BOM — a second one is content, and says so", () => {
+    // One leading BOM is an encoding artifact and is always removed. A SECOND
+    // one is data: it stays in the text, `JSON.parse` rejects the row, and the
+    // parse reports it as an invalid-JSON structure issue with the exact line
+    // instead of silently rescuing it.
+    const result = parseVerdicts(`\uFEFF\uFEFF${JSONL_TWO}`);
+    expect(result.format).toBe("jsonl"); // detectFormat trims U+FEFF
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.cls).toBe("structure");
+    expect(result.issues[0]?.reason).toBe("line 1: invalid JSON — could not parse");
+    expect(result.rowCount).toBe(2);
+    // Row 2 (no BOM) still parses; only the BOM'd row is skipped.
+    expect(result.verdicts.map((row) => row.exampleId)).toEqual(["ex-002"]);
+  });
+
+  it("a single BOM alone is still an honest empty-ish paste", () => {
+    const result = parseVerdicts("\uFEFF");
+    // Nothing left to parse: not a crash, and not a fabricated row.
+    expect(result.verdicts).toEqual([]);
+    expect(result.fatal).toBe(false);
+  });
+});
+
 describe("parseVerdicts — CSV happy path", () => {
   it("parses a CRLF file with a BOM", () => {
     const text = [
@@ -516,6 +569,160 @@ describe("parseVerdicts — performance", () => {
   }, 30_000);
 });
 
+describe("parseVerdicts — the parse wall-clock budget (A10)", () => {
+  /** 512-row cadence, so a 1,500-row fixture is well past the first check. */
+  function rows(count: number): string {
+    return Array.from(
+      { length: count },
+      (_, i) =>
+        `{"example_id":"ex-${i}","judge_label":"pass","human_label":"pass"}`
+    ).join("\n");
+  }
+
+  it("returns a capacity hard error when the budget is already spent", () => {
+    const result = parseVerdicts(rows(1_500), {
+      deadlineAt: Date.now() - 1,
+      budgetMs: 800,
+    });
+
+    expect(result.fatal).toBe(true);
+    expect(result.verdicts).toEqual([]);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]?.cls).toBe("capacity");
+    expect(result.issues[0]?.reason).toContain("exceeded its time budget");
+    // The budget it was given is named, not just "a budget".
+    expect(result.issues[0]?.reason).toContain("in 800 ms");
+    // The line it stopped on is exact, and the copy says what to do.
+    expect(result.issues[0]?.line).toBe(1);
+    expect(result.issues[0]?.reason).toContain("line 1:");
+    expect(result.issues[0]?.reason).toContain("0 rows");
+    expect(result.issues[0]?.reason).toContain("Web Worker");
+  });
+
+  it("a live budget parses every row, undisturbed", () => {
+    const result = parseVerdicts(rows(1_500), {
+      deadlineAt: Date.now() + 60_000,
+      budgetMs: 800,
+    });
+    expect(result.fatal).toBe(false);
+    expect(result.verdicts).toHaveLength(1_500);
+    expect(result.issues).toEqual([]);
+  });
+
+  it("with no budget armed the parse is unbounded, exactly as before (A10)", () => {
+    // The worker path relies on this: the default is NO parse deadline.
+    const result = parseVerdicts(rows(1_500), {});
+    expect(result.fatal).toBe(false);
+    expect(result.verdicts).toHaveLength(1_500);
+  });
+
+  it("a budget that trips past the row cap still reports the cap honestly", () => {
+    // deadlineAt in the past, but the row cap is what stops a SMALL paste.
+    const small = parseVerdicts(rows(10), { deadlineAt: Date.now() - 1 });
+    expect(small.fatal).toBe(true);
+    expect(small.issues[0]?.cls).toBe("capacity");
+  });
+
+  it("names the rows it DID materialize before the trip", () => {
+    // A generous-enough budget to pass the first check but not a big paste:
+    // the honest copy is the row count, never a fabricated total.
+    const result = parseVerdicts(rows(2_000), {
+      deadlineAt: Date.now() + 1,
+      budgetMs: 1,
+    });
+    expect(result.fatal).toBe(true);
+    expect(result.issues[0]?.cls).toBe("capacity");
+    expect(result.issues[0]?.reason).toMatch(/after [\d,]+ rows/);
+    expect(result.verdicts).toEqual([]);
+  });
+});
+
+describe("parseVerdicts — the parse budget through the seam (A10)", () => {
+  /**
+   * A TWO-label session (pass/fail, alternating), so the report is
+   * non-degenerate: `encodePanel` is non-null and the bootstrap actually has
+   * CIs to drop. A single-label fixture would leave `panel === null` and
+   * `ciDropped` false for a reason that has nothing to do with the budget.
+   */
+  const rows = (count: number) =>
+    Array.from(
+      { length: count },
+      (_, i) =>
+        JSON.stringify({
+          example_id: `ex-${i}`,
+          judge_label: i % 2 === 0 ? "pass" : "fail",
+          human_label: i % 3 === 0 ? "pass" : "fail",
+        })
+    ).join("\n");
+
+  it("analyzeVerdicts settles the capacity error as a VALUE with no report", () => {
+    const outcome = analyzeVerdicts(rows(1_500), {
+      deadlineMs: 800,
+      deadlineAt: Date.now() - 1,
+      engine: "main-thread",
+      parseDeadlineArmed: true,
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error).toContain("exceeded its time budget");
+    expect(outcome.error).toContain("in 800 ms");
+    expect(outcome.issues[0]?.cls).toBe("capacity");
+    // No partial report, no zero-filled report — an honest error value.
+    expect(outcome.issueCount).toBe(1);
+  });
+
+  it("the WORKER path leaves the parse unbudgeted (A2 preserved)", () => {
+    // Arming the budget on the worker would turn a legitimate 200k dispatch
+    // into a spurious capacity error, which A2 forbids: without the flag the
+    // parse runs to completion even against a spent deadline.
+    const outcome = analyzeVerdicts(rows(1_500), {
+      deadlineMs: 800,
+      deadlineAt: Date.now() - 1,
+      engine: "worker",
+      seed: 42,
+      confidenceLevel: 0.95,
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.stats.report.n).toBe(1_500);
+    // The budget still governs the compute phases: the CIs are dropped, and
+    // the point statistics are untouched (AGENTS §31).
+    expect(outcome.stats.report.ciDropped).toBe(true);
+    expect(outcome.stats.report.ci.accuracy).toBeNull();
+    expect(outcome.stats.report.ci.kappa).toBeNull();
+    // The point statistics are the ones an unconstrained run would give.
+    const fresh = analyzeVerdicts(rows(1_500), {
+      deadlineMs: 60_000,
+      deadlineAt: Date.now() + 60_000,
+      engine: "worker",
+      seed: 42,
+      confidenceLevel: 0.95,
+    });
+    expect(fresh.ok).toBe(true);
+    if (!fresh.ok) return;
+    expect(outcome.stats.report.accuracy).toBe(
+      fresh.stats.report.accuracy
+    );
+    expect(outcome.stats.report.kappa).toBe(fresh.stats.report.kappa);
+  });
+
+  it("the armed fallback path still settles a report when the budget holds", () => {
+    const outcome = analyzeVerdicts(rows(1_500), {
+      deadlineMs: 60_000,
+      deadlineAt: Date.now() + 60_000,
+      engine: "main-thread",
+      parseDeadlineArmed: true,
+      seed: 42,
+      confidenceLevel: 0.95,
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.stats.report.n).toBe(1_500);
+    expect(outcome.stats.report.ciDropped).toBe(false);
+  });
+});
+
 describe("parseVerdicts — duplicate judge_score slots (SPEC §2.1.5)", () => {
   it("warns once and keeps the row (the labels remain analyzable)", () => {
     const result = parseVerdicts(
@@ -527,5 +734,63 @@ describe("parseVerdicts — duplicate judge_score slots (SPEC §2.1.5)", () => {
     expect(result.warnings).toEqual([
       "line 1: two keys map to judge_score — the calibration panel is not computable",
     ]);
+  });
+
+  it("A12: flags the ambiguity for the report, so the panel is not computable", () => {
+    const result = parseVerdicts(
+      '{"example_id":"a","judge_label":"pass","human_label":"pass","judge_score":0.5,"confidence":0.9}'
+    );
+    // The flag is what `analyzeVerdicts` plumbs into `computeReport`.
+    expect(result.judgeScoreAmbiguous).toBe(true);
+  });
+
+  it("A12: a single judge_score column is NOT ambiguous", () => {
+    const result = parseVerdicts(
+      '{"example_id":"a","judge_label":"pass","human_label":"pass","judge_score":0.5}'
+    );
+    expect(result.judgeScoreAmbiguous).toBe(false);
+  });
+
+  it("A12: the CSV path flags a duplicated judge_score column too", () => {
+    const result = parseVerdicts(
+      [
+        "example_id,judge_label,human_label,judge_score,confidence",
+        "a,pass,pass,0.5,0.9",
+      ].join("\n")
+    );
+    expect(result.fatal).toBe(false);
+    expect(result.verdicts).toHaveLength(1);
+    expect(result.judgeScoreAmbiguous).toBe(true);
+    expect(result.warnings).toEqual([
+      'line 1: two columns map to judge_score: "judge_score" and "confidence" — rename one',
+    ]);
+  });
+
+  it("A12: a duplicated NON-score slot no longer claims the calibration panel", () => {
+    // Two `position` columns say nothing about judge_score. The old copy
+    // pinned the calibration panel's story on every ambiguity; now only the
+    // score slot carries it.
+    const result = parseVerdicts(
+      '{"example_id":"a","judge_label":"pass","human_label":"pass","judge_score":0.5,"position":0,"POSITION":1}'
+    );
+    expect(result.fatal).toBe(false);
+    expect(result.judgeScoreAmbiguous).toBe(false);
+    expect(result.warnings).toEqual([
+      "line 1: two keys map to position — the first one is used",
+    ]);
+  });
+
+  it("A12: a hard (fatal) parse still carries the flag for its envelope", () => {
+    // A duplicated score column followed by a mixed-vocabulary hard error:
+    // the flag must survive into the fatal result, not vanish with the rows.
+    const result = parseVerdicts(
+      [
+        '{"example_id":"a","judge_label":"pass","human_label":"pass","judge_score":0.5,"confidence":0.9}',
+        '{"example_id":"b","judge_label":"TRUE","human_label":"TRUE"}',
+      ].join("\n")
+    );
+    expect(result.fatal).toBe(true);
+    expect(result.verdicts).toEqual([]);
+    expect(result.judgeScoreAmbiguous).toBe(true);
   });
 });

@@ -434,6 +434,16 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
       "with one human rater the panel is 2 coders, so this is Krippendorff's α (a chance-corrected coefficient), not Cohen's κ; the two differ by construction"
     );
 
+    // A9 — the scope of the α INTERVAL is disclosed beside the point figure,
+    // because it is narrower than it: the point uses every rater on a row,
+    // the interval resamples one judge-vs-first-human pair.
+    await expect(alphaPanel.locator("[data-alpha-ci-restriction]")).toContainText(
+      "the α point statistic uses every rater on a row"
+    );
+    await expect(
+      alphaPanel.locator("[data-alpha-ci-restriction]")
+    ).toContainText("resamples a single judge-vs-first-human pair");
+
     // The disagreement table: windowed, honest about the window, and it does
     // contain the 50 rows where human and judge disagree.
     const table = pane.locator("[data-disagreement-table]");

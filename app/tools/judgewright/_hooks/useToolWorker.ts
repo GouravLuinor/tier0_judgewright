@@ -297,10 +297,19 @@ export function useToolWorker() {
       }
 
       // Synchronous fallback path — identical semantics via the shared core.
+      //
+      // A10: `parseDeadlineArmed` is the ONE difference from the worker call,
+      // and it exists because this path runs ON THE MAIN THREAD: an unbounded
+      // parse of a pathological paste would freeze the UI for as long as it
+      // liked, with no watchdog able to save it (there is no thread to
+      // terminate). The parse therefore carries the SAME SYNC_DEADLINE_MS
+      // budget the compute phases already used, and trips into a capacity
+      // error VALUE instead of a freeze. The worker path is unaffected.
       try {
         const result = analyzeVerdicts(inputRef.current.verdictsText, {
           deadlineMs: SYNC_DEADLINE_MS,
           engine: "main-thread",
+          parseDeadlineArmed: true,
           seed: inputRef.current.settings.seed,
           confidenceLevel: inputRef.current.settings.confidenceLevel,
           judgeScoreMode: inputRef.current.settings.judgeScoreMode,

@@ -4,13 +4,14 @@
  * ZERO runtime imports: this file holds only `interface`/`type` declarations,
  * so no UI module can accidentally pull the compute core into the bundle.
  *
- * D1 (statistics core slice 1) state: the parser, the label vocabulary, the
- * confusion matrix, the binary/k-class metrics, Cohen's unweighted κ and the
- * always-majority chance baseline all ship here as typed contracts. Fields the
- * later milestones own (Krippendorff's α, seeded bootstrap CIs, ECE/Brier, the
- * letter grade, position/verbosity bias, the disagreement table) are present as
- * typed `null`/empty seams — never fabricated values — so D2/D3 fill them in
- * place without touching this contract again.
+ * Every milestone named in the D-slices has SHIPPED (the parser, the label
+ * vocabulary, the confusion matrix, the binary/k-class metrics, Cohen's
+ * unweighted κ, the chance baseline, Krippendorff's α, the seeded bootstrap
+ * CIs, ECE/Brier, the letter grade, position/verbosity bias and the
+ * disagreement table), so the contract below is the settled one — the fields
+ * each module owns are still `null`-able, and still never fabricated. This
+ * module stays the single home for anything shared between the worker and the
+ * UI, which is why it must keep ZERO runtime imports.
  */
 
 /** Which engine produced a settled result — printed in the receipt/badge. */
@@ -76,6 +77,20 @@ export interface ParseIssue {
 
 export type VerdictFormat = "jsonl" | "csv";
 
+/**
+ * A10 — the parse budget. `deadlineAt` is the ABSOLUTE wall-clock boundary
+ * (`Date.now()`), checked every `PARSE_DEADLINE_CHECK_ROWS` rows; tripping it
+ * settles a `capacity` parse error as a VALUE instead of holding the thread
+ * until the whole paste is materialized. `budgetMs` is the budget it came
+ * from, carried purely so the error copy can name it. Both are optional: the
+ * unbiased unit tests (and the worker, which runs off-main-thread under its
+ * own tiered watchdog) parse without one.
+ */
+export interface ParseOptions {
+  deadlineAt?: number;
+  budgetMs?: number;
+}
+
 /** Semantic slot → source column, produced by `mapColumns` (SPEC §2.1.2). */
 export interface ColumnMapping {
   exampleId: string | null;
@@ -111,6 +126,15 @@ export interface ParseResult {
   columns: string[];
   mapping: ColumnMapping;
   warnings: string[];
+  /**
+   * A12 — TRUE when two distinct columns/keys map to the SAME `judge_score`
+   * slot. The label slots stay hard errors; a duplicated SCORE slot is legal
+   * on the labels, but it makes the score column ambiguous, so the
+   * calibration panel must be reported NOT COMPUTABLE rather than computed
+   * from whichever alias happened to win. `computeReport` receives this flag
+   * through `ComputeOptions.judgeScoreAmbiguous`.
+   */
+  judgeScoreAmbiguous: boolean;
 }
 
 // ── Statistics ─────────────────────────────────────────────────────────────
@@ -274,6 +298,12 @@ export interface ComputeOptions {
    * Explicit rank order for ordinal α on non-numeric labels.
    */
   labelOrder?: string[];
+  /**
+   * A12 — the parse-derived `judge_score` mapping ambiguity, so a duplicated
+   * score column is reported as a not-computable calibration panel instead of
+   * a confident number computed from an arbitrary alias.
+   */
+  judgeScoreAmbiguous?: boolean;
   /** Parse-derived honesty: rowCount > MAX_ROWS was capped before analysis. */
   truncated?: boolean;
   /** Parse-derived: the true row total seen before the row cap. */

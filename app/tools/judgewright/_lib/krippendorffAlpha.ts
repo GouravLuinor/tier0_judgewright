@@ -52,6 +52,24 @@ export const ALPHA_VS_KAPPA_DISCLOSURE =
 export const ALPHA_KAPPA_BANDS_NOTE =
   "κ-bands applied to α for comparability — not α's own convention";
 
+/**
+ * A9 — the scope of the α CONFIDENCE INTERVAL, disclosed because it is
+ * narrower than the α POINT statistic it brackets.
+ *
+ * The α point statistic is computed over every rater on a row
+ * (`[judge, human1, human2, …]`, `report.ts` Phase A3). The α CI is drawn by
+ * resampling the SAME index stream the accuracy and κ CIs use, which is over
+ * the `[judge, first-human]` PAIR panel (`bootstrapCI.alphaFromPairCounts`)
+ * — the two-coder form every replicate needs in order to share one resample.
+ * With one human rater the pair IS the panel, so the two coincide. With two or
+ * more raters the interval is a PAIR interval and the point is a PANEL
+ * statistic: reporting it without this sentence would let a pair-resampled
+ * interval pose as a full-panel interval. One sentence, always shown beside
+ * the α CI, never a silent difference.
+ */
+export const ALPHA_CI_PAIR_RESTRICTION =
+  "the α point statistic uses every rater on a row; its interval resamples a single judge-vs-first-human pair, so on rows with ≥2 human raters the interval is narrower than the panel it brackets";
+
 /** AC-34: the human ceiling needs a second human rater, not a guess. */
 export const ALPHA_CEILING_NEEDS_RATERS =
   "Human ceiling needs ≥2 human raters per example.";

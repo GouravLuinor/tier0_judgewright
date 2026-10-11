@@ -134,6 +134,8 @@ without uploading my private evaluation set anywhere.*
    | 9 | CSV header/col count mismatch | `structure` | row skipped | `line 8: CSV row has 4 fields, header has 6` |
    | 10 | `rowCount > MAX_ROWS` | `capacity` | **capped before analysis**: the parser stops materializing rows at `MAX_ROWS` while still counting the true total; the amber strip shows the real total; export carries only the analyzed rows | `Results capped at 200,000 of 1,000,000 rows.` |
 
+**A16 — the two caps interact, so the real row capacity is ≈190,000, not 200,000.** `MAX_ROWS` (200,000 rows) and `MAX_INPUT_CHARS` (40,000,000 characters) are independent limits and they MULTIPLY: a critique-bearing row is ~205 characters, so 200,000 of them is ≈41 MB — just past the character limit. The two caps therefore never both bind; a critique-bearing session is bounded by the character ceiling first, at roughly `MAX_INPUT_CHARS ÷ ~205` ≈ 190,000 rows, and a paste larger than that is rejected by the character check with its true size named rather than silently truncated at 200,000 rows. Disclosed at the constants themselves and in `_lib/constants.ts`.
+
 ### 2.2 Deterministic statistics core (all pure, all in a Web Worker)
 
 | Statistic | Definition shipped |

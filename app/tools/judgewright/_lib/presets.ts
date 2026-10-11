@@ -7,7 +7,7 @@
  * seeded benchmark dataset (`presets.test.ts` guards it).
  */
 
-import { DEFAULT_CONFIDENCE_LEVEL, DEFAULT_SEED } from "./constants";
+import { DEFAULT_CONFIDENCE_LEVEL, DEFAULT_SEED } from "./constants.ts";
 import type { JudgewrightSettings } from "./types";
 
 /** Verdicts that light up the pane on first paint, before any interaction. */

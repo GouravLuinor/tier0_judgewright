@@ -10,9 +10,10 @@ import {
   bootstrapTierCopy,
   encodePanel,
 } from "../bootstrapCI";
+import { analyzeVerdicts } from "../analyze";
 import { cohensKappa, kappaFromPairCounts } from "../cohensKappa";
 import { krippendorffAlpha } from "../krippendorffAlpha";
-import { DEFAULT_SEED } from "../constants";
+import { DEFAULT_CONFIDENCE_LEVEL, DEFAULT_SEED } from "../constants";
 
 /**
  * AC-13/49/52/53 — the seeded, index-resampling, byte-reproducible bootstrap.
@@ -139,6 +140,130 @@ describe("bootstrapBundle — determinism (AC-13)", () => {
     // Seed 7 is a different draw: the same strings must NOT appear.
     expect(lines[2]).not.toBe(expected);
     expect(lines[2]).toContain("seed=7");
+  });
+});
+
+/**
+ * A14 — the WHOLE pipeline, not just the bootstrap, runs outside a bundler.
+ *
+ * `repro.analyze.entry.ts` imports `analyzeVerdicts` (parse → computeReport →
+ * bootstrap) and prints a digest of the settled report. Node resolves only
+ * fully-specified specifiers, so this test fails if any `_lib` module drops
+ * the `.ts` extension from a runtime import — the class of bug the app's
+ * bundler hides until someone tries to run the pure core directly.
+ */
+describe("A14 — analyzeVerdicts runs under node --experimental-strip-types", () => {
+  /** Spawn the cross-process entry and return its `REPRO-ANALYZE` payloads. */
+  function spawnAnalyzeEntry(): string[] {
+    const entry = fileURLToPath(new URL("./repro.analyze.entry.ts", import.meta.url));
+    const stdout = execFileSync(process.execPath, ["--experimental-strip-types", entry], {
+      encoding: "utf8",
+    });
+    return stdout
+      .split("\n")
+      .filter((line) => line.startsWith("REPRO-ANALYZE "))
+      .map((line) => line.slice("REPRO-ANALYZE ".length));
+  }
+
+  it("the entry imports analyzeVerdicts end to end and prints three digests", () => {
+    const lines = spawnAnalyzeEntry();
+    // Two runs of the same fixture plus one deliberately different fixture.
+    expect(lines).toHaveLength(3);
+
+    // The same input reproduces itself, in-process and across the process.
+    expect(lines[0]).toBe(lines[1]);
+
+    // The second fixture genuinely differs — a digest that would pass if the
+    // entry were printing a constant.
+    expect(lines[2]).not.toBe(lines[0]);
+    expect(lines[0]).toContain("n=1000");
+    expect(lines[2]).toContain("n=500");
+  });
+
+  it("the digest matches the in-process run on the same fixture (AC-13)", () => {
+    const [first] = spawnAnalyzeEntry();
+    expect(first).toBeDefined();
+
+    // Recompute the digest in THIS process and compare the figures.
+    const human: string[] = [];
+    const judge: string[] = [];
+    const push = (count: number, h: string, j: string) => {
+      for (let i = 0; i < count; i++) {
+        human.push(h);
+        judge.push(j);
+      }
+    };
+    push(920, "P", "P");
+    push(30, "N", "P");
+    push(20, "P", "N");
+    push(30, "N", "N");
+    const rows: string[] = human.map((label, i) =>
+      JSON.stringify({
+        example_id: `ex-${String(i).padStart(4, "0")}`,
+        judge_label: judge[i],
+        human_label: label,
+      })
+    );
+
+    const outcome = analyzeVerdicts(rows.join("\n"), {
+      deadlineMs: 60_000,
+      deadlineAt: Date.now() + 60_000,
+      engine: "worker",
+      seed: DEFAULT_SEED,
+      confidenceLevel: DEFAULT_CONFIDENCE_LEVEL,
+    });
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const { report } = outcome.stats;
+
+    const precision = (value: number | null) =>
+      value === null ? "null" : value.toPrecision(17);
+    const expected = [
+      "n=1000",
+      `acc=${precision(report.accuracy)}`,
+      `kappa=${precision(report.kappa)}`,
+      `deflation=${precision(report.deflation)}`,
+      `alphaPanel=${precision(report.alphaPanel)}`,
+      `baseline=${precision(report.baseline.baselineAgreement)}`,
+      `B=${report.bootstrapReplicates}`,
+      `grade=${report.grade}`,
+    ].join(" ");
+
+    // Every pinned figure, at 17 significant digits, byte-identical across
+    // the process boundary.
+    for (const token of expected.split(" ")) {
+      expect(first).toContain(token);
+    }
+    expect(first).toContain(`chars=${rows.join("\n").length}`);
+    expect(first).toContain(`bytes=${rows.join("\n").length}`);
+  });
+
+  it("the entry's own source is the guard: every runtime import is .ts-specified", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("./repro.analyze.entry.ts", import.meta.url)),
+      "utf8"
+    );
+    // A bare `from "./x"` would resolve in the bundler and fail here; the
+    // entry must not carry one.
+    expect(source).toContain('from "../analyze.ts"');
+
+    // Every relative specifier in the entry must name a runtime file.
+    // Comment lines are skipped first: this suite's own docstrings quote bare
+    // specifiers on purpose, and a guard that trips on prose is no guard.
+    const codeLines = source
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("*") && !trimmed.startsWith("//");
+      })
+      .join("\n");
+    const specifiers = Array.from(codeLines.matchAll(/from "([^"]+)"/g)).map(
+      (match) => match[1] as string
+    );
+    const bare = specifiers.filter(
+      (specifier) => specifier.startsWith(".") && !specifier.endsWith(".ts")
+    );
+    expect(bare, "every relative import carries its .ts extension").toEqual([]);
   });
 });
 

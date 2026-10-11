@@ -20,7 +20,7 @@
  * rates of AC-09 (0.05 … 0.99).
  */
 
-import { normalizeLabel } from "./labels";
+import { normalizeLabel } from "./labels.ts";
 import type { ChanceBaseline } from "./types";
 
 /**

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildDisagreementRows } from "../../_lib/disagreements.ts";
 import { confusionMatrix } from "../../_lib/confusionMatrix.ts";
-import { DIAGNOSIS_DISAGREEMENT_LIMIT } from "../../_lib/constants.ts";
+import {
+  DIAGNOSIS_DISAGREEMENT_LIMIT,
+  DIAGNOSIS_EXCERPT_CHARS,
+  DIAGNOSIS_MAX_ARRAY_ITEMS,
+  DIAGNOSIS_MAX_STRING_CHARS,
+  MAX_RUBRIC_CHARS,
+} from "../../_lib/constants.ts";
 import {
   DIAGNOSIS_CONFIGURE_COPY,
   DEFAULT_DIAGNOSIS_MODEL,
@@ -30,6 +36,20 @@ function row(exampleId: string, human: string, judge: string): RawVerdict {
     position: null,
     preferredLonger: null,
     lineNumber: 0,
+  };
+}
+
+/**
+ * A11 — one row whose content fields are all oversized, so the request builder
+ * has something to excerpt. ~90 KB per field, four fields per row.
+ */
+function hugeRow(exampleId: string, human: string, judge: string): RawVerdict {
+  return {
+    ...row(exampleId, human, judge),
+    judgeInput: "I".repeat(90_000),
+    judgeOutput: "O".repeat(90_000),
+    humanCritique: "H".repeat(90_000),
+    judgeCritique: "J".repeat(90_000),
   };
 }
 
@@ -105,6 +125,210 @@ describe("buildDiagnosisRequest — the disclosed payload (AC-18)", () => {
     // Round-robin picks one row per distinct cell first (a-0 then b-0).
     expect(payload.disagreements[0]?.id).toBe("a-0");
     expect(payload.disagreements[1]?.id).toBe("b-0");
+  });
+});
+
+/**
+ * A11 — the payload cap. Without it, a session whose critiques are megabytes
+ * each builds a request in the hundreds of MB (25 rows × 4 fields) — a
+ * self-inflicted DoS on the user's own pane and a request no provider accepts.
+ */
+describe("buildDiagnosisRequest — the payload is capped (A11)", () => {
+  /** The transmitted payload as the code actually serializes it. */
+  function payloadOf(request: ReturnType<typeof buildDiagnosisRequest>) {
+    return JSON.parse(request.body.messages[1]?.content ?? "{}") as {
+      rubric: string;
+      disagreements: Record<string, string | null>[];
+    };
+  }
+
+  it("excerpts every per-row content field to the cap, marking the truncation", () => {
+    const built = buildDisagreementRows([
+      ...Array.from({ length: 12 }, (_, i) => hugeRow(`a-${i}`, "pos", "neg")),
+    ]);
+    const confusion = confusionMatrix(
+      built.map((r) => r.judgeLabel),
+      built.map((r) => r.humanLabel)
+    );
+    const request = buildDiagnosisRequest(
+      "rubric",
+      selectDiagnosisDisagreements(built, confusion)
+    );
+    const payload = payloadOf(request);
+
+    expect(payload.disagreements.length).toBeGreaterThan(0);
+    for (const entry of payload.disagreements) {
+      for (const field of ["input", "output", "human_critique", "judge_critique"]) {
+        const value = entry[field];
+        expect(typeof value).toBe("string");
+        // ≤ cap + the ellipsis marker — never the original 90,000 characters.
+        expect((value as string).length).toBeLessThanOrEqual(
+          DIAGNOSIS_EXCERPT_CHARS + 1
+        );
+        // A truncation is MARKED, not silent: the excerpt ends with an ellipsis.
+        const text = value as string;
+        expect(text.endsWith("…")).toBe(true);
+        // And it is not the original field.
+        expect(value).not.toBe("I".repeat(90_000));
+      }
+    }
+  });
+
+  it("caps the whole request at a bounded worst case, not hundreds of MB", () => {
+    const built = buildDisagreementRows([
+      ...Array.from({ length: 40 }, (_, i) => hugeRow(`a-${i}`, "pos", "neg")),
+    ]);
+    const confusion = confusionMatrix(
+      built.map((r) => r.judgeLabel),
+      built.map((r) => r.humanLabel)
+    );
+    const request = buildDiagnosisRequest(
+      "R".repeat(MAX_RUBRIC_CHARS),
+      selectDiagnosisDisagreements(built, confusion)
+    );
+    const serialized = JSON.stringify(request.body);
+
+    // The bound is the CAPS, not the fixture: 25 rows × 4 excerpted fields
+    // (2 KB each) plus the 8 KB rubric is ~208 KB before JSON overhead. The
+    // UNCAPPED figure for this same fixture is 25 × 4 × 90 KB = 9 MB, and
+    // 25 × 4 × 40 MB for a maximal session — so a few hundred KB is proof the
+    // cap is doing the work, without pinning a byte-exact size.
+    const cappedBound = 25 * 4 * (DIAGNOSIS_EXCERPT_CHARS + 2) + MAX_RUBRIC_CHARS;
+    expect(serialized.length).toBeLessThan(cappedBound * 1.5);
+    // And it is far below what the same rows would be uncapped.
+    const uncapped = 25 * 4 * 90_000;
+    expect(serialized.length).toBeLessThan(uncapped / 10);
+  });
+
+  it("leaves an in-cap field byte-identical — no gratuitous truncation", () => {
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const payload = payloadOf(request);
+    expect(payload.disagreements[0]?.input).toBe("input a-0");
+    expect(payload.disagreements[0]?.human_critique).toBe("human says so");
+    // Nothing is rewritten for a normal payload.
+    expect(payload.disagreements[0]?.judge_critique).toBe("judge says so");
+  });
+
+  it("keeps the disclosed payload EXACTLY what is sent (AC-18)", () => {
+    const built = buildDisagreementRows([
+      ...Array.from({ length: 12 }, (_, i) => hugeRow(`a-${i}`, "pos", "neg")),
+    ]);
+    const confusion = confusionMatrix(
+      built.map((r) => r.judgeLabel),
+      built.map((r) => r.humanLabel)
+    );
+    const request = buildDiagnosisRequest(
+      "rubric",
+      selectDiagnosisDisagreements(built, confusion)
+    );
+
+    const { fetchImpl, calls } = makeFetch(() => jsonChat({}));
+    // The posted body IS the request body, so the disclosure cannot drift.
+    void llmDiagnosis(request, { apiKey: API_KEY, fetchImpl }).catch(() => undefined);
+    expect(calls[0]?.init.body).toBe(JSON.stringify(request.body));
+  });
+
+  it("an absent field stays absent rather than becoming an empty string", () => {
+    const rows: DisagreementRow[] = [
+      {
+        exampleId: "a-0",
+        humanLabel: "pos",
+        humanLabels: ["pos"],
+        judgeLabel: "neg",
+        agree: false,
+        judgeScore: null,
+        humanScore: null,
+        judgeCritique: null,
+        humanCritique: null,
+        judgeInput: null,
+        judgeOutput: null,
+        lineNumber: 1,
+      },
+    ];
+    const payload = payloadOf(buildDiagnosisRequest("rubric", rows));
+    expect(payload.disagreements[0]?.input).toBeNull();
+    expect(payload.disagreements[0]?.output).toBeNull();
+    expect(payload.disagreements[0]?.judge_critique).toBeNull();
+  });
+});
+
+/**
+ * A11 — the response cap. A hostile or broken model can answer with a
+ * megabyte-long array; the panel used to hand that straight to the DOM.
+ */
+describe("llmDiagnosis — the response is capped (A11)", () => {
+  /** A valid curated diagnosis whose arrays are `count` copies of `text`. */
+  function diagnosis(count: number, text: string): string {
+    return JSON.stringify({
+      rubric_holes: Array.from({ length: count }, () => text),
+      bias_flags: ["flag"],
+      misapplications: ["a-0"],
+      priority_fix: "fix it",
+    });
+  }
+
+  it("accepts exactly the documented array ceiling", async () => {
+    const { fetchImpl } = makeFetch(() =>
+      chatWithContent(diagnosis(DIAGNOSIS_MAX_ARRAY_ITEMS, "hole"))
+    );
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const result = await llmDiagnosis(request, { apiKey: API_KEY, fetchImpl });
+    expect(result.rubricHoles).toHaveLength(DIAGNOSIS_MAX_ARRAY_ITEMS);
+  });
+
+  it("rejects an oversized array with a typed FORMAT error", async () => {
+    const { fetchImpl } = makeFetch(() =>
+      chatWithContent(diagnosis(DIAGNOSIS_MAX_ARRAY_ITEMS + 1, "hole"))
+    );
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const error = await llmDiagnosis(request, { apiKey: API_KEY, fetchImpl }).catch((e) => e);
+    expect(error).toBeInstanceOf(DiagnosisError);
+    expect((error as DiagnosisError).kind).toBe("format");
+    expect((error as DiagnosisError).message).toContain(
+      String(DIAGNOSIS_MAX_ARRAY_ITEMS)
+    );
+    expect((error as DiagnosisError).message).toContain("list");
+  });
+
+  it("rejects an oversized STRING with a typed FORMAT error", async () => {
+    const { fetchImpl } = makeFetch(() =>
+      chatWithContent(diagnosis(1, "X".repeat(DIAGNOSIS_MAX_STRING_CHARS + 1)))
+    );
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const error = await llmDiagnosis(request, { apiKey: API_KEY, fetchImpl }).catch((e) => e);
+    expect(error).toBeInstanceOf(DiagnosisError);
+    expect((error as DiagnosisError).kind).toBe("format");
+    expect((error as DiagnosisError).message).toContain("character");
+    expect((error as DiagnosisError).message).toContain(
+      DIAGNOSIS_MAX_STRING_CHARS.toLocaleString("en-US")
+    );
+  });
+
+  it("accepts a string at the ceiling and rejects one past it", async () => {
+    const atCap = "Y".repeat(DIAGNOSIS_MAX_STRING_CHARS);
+    const { fetchImpl } = makeFetch(() => chatWithContent(diagnosis(1, atCap)));
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const result = await llmDiagnosis(request, { apiKey: API_KEY, fetchImpl });
+    expect(result.rubricHoles[0]).toBe(atCap);
+  });
+
+  it("caps every curated array, not just the first one", async () => {
+    const { fetchImpl } = makeFetch(() =>
+      chatWithContent(
+        JSON.stringify({
+          rubric_holes: ["hole"],
+          bias_flags: Array.from({ length: DIAGNOSIS_MAX_ARRAY_ITEMS + 1 }, () => "flag"),
+          misapplications: Array.from(
+            { length: DIAGNOSIS_MAX_ARRAY_ITEMS + 1 },
+            () => "Z".repeat(DIAGNOSIS_MAX_STRING_CHARS + 1)
+          ),
+          priority_fix: "fix it",
+        })
+      )
+    );
+    const request = buildDiagnosisRequest("rubric", disagreements());
+    const error = await llmDiagnosis(request, { apiKey: API_KEY, fetchImpl }).catch((e) => e);
+    expect((error as DiagnosisError).kind).toBe("format");
   });
 });
 

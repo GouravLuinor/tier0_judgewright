@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { Activity, Microscope, TriangleAlert } from "lucide-react";
 import { copyTextToClipboard } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
@@ -9,6 +10,7 @@ import { MAX_TABLE_ROWS } from "../_lib/constants";
 import { bootstrapTierCopy } from "../_lib/bootstrapCI";
 import {
   ALPHA_CEILING_NEEDS_RATERS,
+  ALPHA_CI_PAIR_RESTRICTION,
   ALPHA_KAPPA_BANDS_NOTE,
   ALPHA_VS_KAPPA_DISCLOSURE,
 } from "../_lib/krippendorffAlpha";
@@ -19,15 +21,27 @@ import {
   letterGrade,
 } from "../_lib/grade";
 import {
+  degradedNoticeCopy,
   percent,
   renderMarkdownReport,
   sigFigs,
 } from "../_lib/reportRender";
 import { useToolStore } from "../_store/useToolStore";
 import type { CalibrationReport } from "../_lib/types";
-import { DiagnosisPanel } from "./DiagnosisPanel";
 import { ExportBar } from "./ExportBar";
 import { BiasReadout, CalibrationReadout } from "./ReportInsights";
+
+/**
+ * The diagnosis panel is loaded on demand. It owns the ONLY optional network
+ * path in the product (the BYOK OpenRouter call) and is OFF by default
+ * (AUTO_DIAGNOSIS_ENABLED === false, AGENTS §36) — nothing renders it until the
+ * user chooses to configure a key and run a diagnosis, so its code has no
+ * business being in the first-load payload of a tool whose promise is
+ * "100% in-browser".
+ */
+const DiagnosisPanel = dynamic(() => import("./DiagnosisPanel").then((m) => m.DiagnosisPanel), {
+  ssr: false,
+});
 
 /**
  * The report pane: five states, one report card.
@@ -114,11 +128,19 @@ export function ReportPane() {
           <p
             className="mb-3 flex items-start gap-2 rounded-lg border border-brand-amber/40 bg-brand-amber/10 p-3 text-xs leading-relaxed text-brand-amber"
             role="status"
+            data-degraded-notice
           >
             <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              Worker unavailable — computing on the main thread. Every number is
-              identical; only the engine badge differs.
+              {/* A8: the old copy claimed "every number is identical", which
+                  is FALSE whenever the sync budget dropped the bootstrap CIs
+                  (it usually does — SYNC_DEADLINE_MS is the stricter budget,
+                  and the fallback runs it with the parse folded in). The
+                  point statistics really are identical; the intervals really
+                  are not. The banner now says whichever is true. */}
+              {degradedNoticeCopy(
+                stats === null ? null : stats.report.ciDropped
+              )}
             </span>
           </p>
         )}
@@ -502,6 +524,19 @@ function ReportCard({
               <span className="text-zinc-500">
                 grade on α: {report.alphaPanel === null ? "—" : letterGrade(report.alphaPanel)}{" "}
                 — {ALPHA_KAPPA_BANDS_NOTE}.
+              </span>
+            </>
+          )}
+          {/* A9: the α POINT statistic uses every rater on a row
+              ([judge, human1, human2, …]); the α CI resamples a single
+              [judge, first-human] pair. With one human rater the two are the
+              same panel; with ≥2 they are not, and the panel says so instead
+              of letting the interval look like a full-panel interval. */}
+          {report.ci.alpha !== null && (
+            <>
+              <br />
+              <span className="text-zinc-500" data-alpha-ci-restriction>
+                {ALPHA_CI_PAIR_RESTRICTION}
               </span>
             </>
           )}

@@ -29,13 +29,13 @@ import {
   confusionMatrix,
   defaultPositiveClass,
   multiclassMetrics,
-} from "./confusionMatrix";
-import { cohensKappa, kappaReceiptInputs, kappaUndefinedReason } from "./cohensKappa";
-import { MAX_TABLE_ROWS, WORKER_DEADLINE_MS } from "./constants";
+} from "./confusionMatrix.ts";
+import { cohensKappa, kappaReceiptInputs, kappaUndefinedReason } from "./cohensKappa.ts";
+import { MAX_TABLE_ROWS, WORKER_DEADLINE_MS } from "./constants.ts";
 import { buildDisagreementRows } from "./disagreements.ts";
 import { landisKochLabel, letterGrade } from "./grade.ts";
 import { alphaReplicateContext, krippendorffAlpha } from "./krippendorffAlpha.ts";
-import { renderReceipt } from "./reportRender";
+import { renderReceipt } from "./reportRender.ts";
 import type {
   AlphaLevel,
   CalibrationReport,
@@ -231,6 +231,10 @@ export function computeReport(
       judgeScoreMode,
       bins,
       binMode,
+      // A12: the parse-derived score-slot ambiguity rides all the way through,
+      // so a duplicated `judge_score` column makes the panel NOT COMPUTABLE
+      // instead of a number computed from an arbitrary alias.
+      judgeScoreAmbiguous: options.judgeScoreAmbiguous,
     }),
     bias: biasMetrics(rows),
     grade,

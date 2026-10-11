@@ -21,9 +21,9 @@ import {
   MAX_INPUT_CHARS,
   MAX_PARSE_ISSUES,
   WORKER_DEADLINE_MS,
-} from "./constants";
-import { parseVerdicts } from "./parse";
-import { computeReport, reportDisagreementWindow } from "./report";
+} from "./constants.ts";
+import { parseVerdicts } from "./parse.ts";
+import { computeReport, reportDisagreementWindow } from "./report.ts";
 import type {
   AlphaLevel,
   AnalysisOutcome,
@@ -51,6 +51,17 @@ export interface AnalyzeOptions {
   confidenceLevel?: number;
   /** Paste ceiling override for tests. */
   maxInputChars?: number;
+  /**
+   * A10 — when TRUE the parse loop itself carries the cooperative budget
+   * (`deadlineAt`), so a pathological paste settles a `capacity` parse error
+   * instead of holding the calling thread. ARMED ONLY FOR THE MAIN-THREAD
+   * FALLBACK: the worker parses on its own thread, where a long parse costs
+   * the UI nothing and its watchdog (tiered by payload size, `watchdogMsFor`)
+   * is the real guard — arming it there would turn a legitimate 200k-row
+   * dispatch into a spurious error, which A2's "an in-cap input always
+   * settles a report" contract forbids.
+   */
+  parseDeadlineArmed?: boolean;
   /** Which engine is running — stamped into the result, never guessed. */
   engine?: ComputeEngine;
   /** Krippendorff's α level (default nominal; the selector UI lands in D3). */
@@ -127,7 +138,15 @@ export function analyzeVerdicts(
     };
   }
 
-  const parsed = parseVerdicts(verdictsText);
+  // A10: derive the ABSOLUTE budget once, BEFORE the parse, and hand the parse
+  // the same boundary on the main-thread fallback path (where an unbounded
+  // parse is a main-thread freeze). The worker path deliberately parses
+  // unbudgeted: it runs off-main-thread under a tiered watchdog.
+  const deadlineAt = options.deadlineAt ?? startedAt + deadlineMs;
+  const parsed = parseVerdicts(
+    verdictsText,
+    options.parseDeadlineArmed === true ? { deadlineAt, budgetMs: deadlineMs } : {}
+  );
 
   // A fatal parse (mixed vocabularies, capacity, single-column input,
   // ambiguity on an id/label slot) settles its OWN verbatim copy: no partial
@@ -158,7 +177,6 @@ export function analyzeVerdicts(
     // the compute phases unchecked. A trip therefore reports honestly
     // (`ciDropped`) while the point statistics still settle — an in-cap
     // input never produces an error-with-no-report.
-    const deadlineAt = options.deadlineAt ?? startedAt + deadlineMs;
     const report: CalibrationReport = computeReport(parsed.verdicts, {
       seed,
       confidenceLevel,
@@ -167,6 +185,9 @@ export function analyzeVerdicts(
       engine,
       truncated: parsed.capped,
       rowCount: parsed.rowCount,
+      // A12: the duplicated `judge_score` slot makes the calibration panel
+      // honestly not computable instead of confident and wrong.
+      judgeScoreAmbiguous: parsed.judgeScoreAmbiguous,
       alphaLevel: options.alphaLevel,
       labelOrder: options.labelOrder,
       judgeScoreMode: options.judgeScoreMode,

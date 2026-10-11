@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bootstrapTierCopy } from "../bootstrapCI";
 import {
+  degradedNoticeCopy,
   percent,
   renderAgreementJsonl,
   renderMarkdownReport,
@@ -48,6 +49,60 @@ const report = computeReport(headlineRows(), {
   confidenceLevel: 0.95,
   deadlineMs: 1_000,
   engine: "worker",
+});
+
+/**
+ * A8 — the fallback banner's copy is chosen by `ciDropped`, never asserted.
+ * This is the assertion the old copy could not survive: "every number is
+ * identical" was printed unconditionally, while a sync run whose budget was
+ * spent had its bootstrap CIs dropped — a claim the user could falsify by
+ * looking at the missing intervals beside the report's own ciDropped notice.
+ */
+describe("degradedNoticeCopy — honest about the intervals (A8)", () => {
+  const OPENING = "Worker unavailable — computing on the main thread.";
+
+  it("claims identity ONLY when the intervals were not dropped", () => {
+    const copy = degradedNoticeCopy(false);
+    expect(copy.startsWith(OPENING)).toBe(true);
+    expect(copy).toContain("Every number is identical");
+    // And it does not hedge with a cap it did not hit.
+    expect(copy).not.toContain("capped");
+  });
+
+  it("names the cap when the intervals WERE dropped", () => {
+    const copy = degradedNoticeCopy(true);
+    expect(copy.startsWith(OPENING)).toBe(true);
+    expect(copy).toContain("capped the bootstrap CIs");
+    // The point statistics are still claimed — correctly, and specifically.
+    expect(copy).toContain("same point statistics");
+    // It never claims the numbers are identical.
+    expect(copy).not.toContain("Every number is identical");
+  });
+
+  it("says less, not more, when the state is not known yet", () => {
+    // The banner can render before the first settle; claiming either outcome
+    // then would be a guess, so the copy states only what is certain.
+    const copy = degradedNoticeCopy(null);
+    expect(copy.startsWith(OPENING)).toBe(true);
+    expect(copy).not.toContain("Every number is identical");
+    expect(copy).not.toContain("capped the bootstrap CIs");
+    expect(copy).toContain("may cap");
+  });
+
+  it("every variant opens with the same named fallback", () => {
+    for (const state of [true, false, null] as const) {
+      expect(degradedNoticeCopy(state)).toContain(OPENING);
+    }
+  });
+
+  it("the dropped variant is not the identical variant with a word changed", () => {
+    // A regression guard: the two claims differ in what they assert about the
+    // intervals, so a copy-paste between them is caught.
+    expect(degradedNoticeCopy(true)).not.toBe(degradedNoticeCopy(false));
+    expect(degradedNoticeCopy(true).length).toBeGreaterThan(
+      degradedNoticeCopy(false).length
+    );
+  });
 });
 
 describe("sigFigs / percent", () => {

@@ -13,9 +13,27 @@
  * with a Bearer key the user supplies. It is fully injectable — `fetchImpl`,
  * `model` and `signal` are parameters — so the whole flow is testable without a
  * network or a real key.
+ *
+ * A11 — the payload is CAPPED IN BOTH DIRECTIONS, because the input and the
+ * output are both untrusted at the "260 MB request / frozen pane" scale:
+ *   · REQUEST: a judge session may legally carry multi-megabyte critique /
+ *     input / output cells, and 25 rows × 4 such fields is a request in the
+ *     hundreds of MB. Every per-row field is therefore excerpted to
+ *     `DIAGNOSIS_EXCERPT_CHARS`, and the disclosed payload is built from the
+ *     SAME excerpted rows, so "What we send" shows what is really sent.
+ *   · RESPONSE: a hostile or broken model can answer with a megabyte-long
+ *     array of strings. `parseDiagnosis` refuses anything past
+ *     `DIAGNOSIS_MAX_ARRAY_ITEMS` entries or `DIAGNOSIS_MAX_STRING_CHARS` per
+ *     string with a typed `format` error, rather than handing the pane a
+ *     payload that freezes it while it renders.
  */
 
-import { DIAGNOSIS_DISAGREEMENT_LIMIT } from "../_lib/constants.ts";
+import {
+  DIAGNOSIS_DISAGREEMENT_LIMIT,
+  DIAGNOSIS_EXCERPT_CHARS,
+  DIAGNOSIS_MAX_ARRAY_ITEMS,
+  DIAGNOSIS_MAX_STRING_CHARS,
+} from "../_lib/constants.ts";
 import { selectDiagnosisDisagreements } from "../_lib/disagreements.ts";
 import type { DisagreementRow } from "../_lib/types.ts";
 
@@ -55,6 +73,18 @@ export class DiagnosisError extends Error {
     this.name = "DiagnosisError";
     this.kind = kind;
   }
+}
+
+/**
+ * A11 — excerpt one transmitted field to `DIAGNOSIS_EXCERPT_CHARS`, marking a
+ * truncation with a single ellipsis so the receipt is honest about it. Absent
+ * fields stay absent (never the empty string) and short fields are untouched,
+ * so a normal payload is byte-identical to what it always was.
+ */
+function excerptField(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  if (value.length <= DIAGNOSIS_EXCERPT_CHARS) return value;
+  return `${value.slice(0, DIAGNOSIS_EXCERPT_CHARS)}…`;
 }
 
 /** One disagreement row as it appears in the transmitted payload. */
@@ -126,16 +156,20 @@ export function buildDiagnosisRequest(
   rubric: string,
   disagreements: readonly DisagreementRow[]
 ): DiagnosisHttpRequest {
+  // A11: every content field is excerpted. The rows were already capped at
+  // DIAGNOSIS_DISAGREEMENT_LIMIT (25) by the round-robin selection; this bounds
+  // each FIELD, so the worst-case request is 25 × 4 × 2 KB ≈ 200 KB instead of
+  // 25 × 4 × 40 MB.
   const payload: DiagnosisDisagreement[] = disagreements
     .slice(0, DIAGNOSIS_DISAGREEMENT_LIMIT)
     .map((row) => ({
       id: row.exampleId,
-      input: row.judgeInput,
-      output: row.judgeOutput,
+      input: excerptField(row.judgeInput),
+      output: excerptField(row.judgeOutput),
       human_label: row.humanLabel,
-      human_critique: row.humanCritique,
+      human_critique: excerptField(row.humanCritique),
       judge_label: row.judgeLabel,
-      judge_critique: row.judgeCritique,
+      judge_critique: excerptField(row.judgeCritique),
     }));
   const userContent = JSON.stringify({ rubric, disagreements: payload }, null, 2);
   return {
@@ -176,10 +210,29 @@ function parseDiagnosis(content: unknown): DiagnosisResult {
     throw new DiagnosisError("format", "The diagnosis response was not an object.");
   }
   const obj = parsed as Record<string, unknown>;
-  const asStringArray = (value: unknown): string[] | null =>
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-      ? (value as string[])
-      : null;
+  // A11: the response is capped in BOTH dimensions. An oversized array or an
+  // oversized string is a `format` error — the same typed value the panel
+  // already renders for nonconforming JSON — rather than a payload that
+  // reaches the DOM (and the user's patience) at attacker-chosen size.
+  const asStringArray = (value: unknown): string[] | null => {
+    if (!Array.isArray(value)) return null;
+    if (value.length > DIAGNOSIS_MAX_ARRAY_ITEMS) {
+      throw new DiagnosisError(
+        "format",
+        `The diagnosis response listed ${value.length} items — the limit is ${DIAGNOSIS_MAX_ARRAY_ITEMS}.`
+      );
+    }
+    for (const item of value) {
+      if (typeof item !== "string") return null;
+      if (item.length > DIAGNOSIS_MAX_STRING_CHARS) {
+        throw new DiagnosisError(
+          "format",
+          `The diagnosis response carried a ${item.length.toLocaleString("en-US")}-character item — the limit is ${DIAGNOSIS_MAX_STRING_CHARS.toLocaleString("en-US")}.`
+        );
+      }
+    }
+    return value as string[];
+  };
   const rubricHoles = asStringArray(obj.rubric_holes);
   const biasFlags = asStringArray(obj.bias_flags);
   const misapplications = asStringArray(obj.misapplications);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CALIBRATION_AMBIGUOUS_REASON,
   CALIBRATION_MISMATCH_COPY,
   CALIBRATION_NOT_COMPUTABLE_REASON,
   brier,
@@ -181,6 +182,111 @@ describe("calibrationPanel — the AC-40 mode difference on the SAME rows", () =
       binMode: "width",
     });
     expect(calm?.mismatchWarning).toBeNull();
+  });
+});
+
+/**
+ * A12 — a duplicated `judge_score` column makes the calibration panel NOT
+ * COMPUTABLE. The panel used to compute anyway from whichever alias the
+ * parser resolved first, which is a confident number with no single meaning
+ * behind it. Now the ambiguity is a stop: null values, a reason naming the
+ * cause, and no fabricated 0 (FM-3 / FM-12).
+ */
+describe("calibrationPanel — the ambiguous score column (A12)", () => {
+  const OPTIONS = {
+    positiveClass: "pos",
+    judgeScoreMode: "p-positive" as const,
+    bins: 10,
+    binMode: "width" as const,
+  };
+
+  it("is not computable when two columns map to judge_score", () => {
+    const panel = calibrationPanel(HAND_ROWS, {
+      ...OPTIONS,
+      judgeScoreAmbiguous: true,
+    });
+
+    expect(panel?.computable).toBe(false);
+    expect(panel?.ece).toBeNull();
+    expect(panel?.brier).toBeNull();
+    expect(panel?.reason).toBe(CALIBRATION_AMBIGUOUS_REASON);
+    expect(panel?.ambiguousReason).toBe(CALIBRATION_AMBIGUOUS_REASON);
+    // The disclosure fields still say which mode / class WOULD have applied.
+    expect(panel?.scoreMode).toBe("p-positive");
+    expect(panel?.positiveClass).toBe("pos");
+    expect(panel?.scoreCount).toBe(0);
+    expect(panel?.mismatchWarning).toBeNull();
+  });
+
+  it("the reason names the duplicate column and what to do about it", () => {
+    expect(CALIBRATION_AMBIGUOUS_REASON).toContain("judge_score");
+    expect(CALIBRATION_AMBIGUOUS_REASON).toContain("rename one");
+    // And it is distinct from the no-scores reason, so the two causes are
+    // never conflated in the UI.
+    expect(CALIBRATION_AMBIGUOUS_REASON).not.toBe(CALIBRATION_NOT_COMPUTABLE_REASON);
+  });
+
+  it("an unambiguous panel computes normally on the same rows", () => {
+    const panel = calibrationPanel(HAND_ROWS, {
+      ...OPTIONS,
+      judgeScoreAmbiguous: false,
+    });
+    expect(panel?.computable).toBe(true);
+    expect(near(panel?.ece, 0.2)).toBe(true);
+    expect(panel?.reason).toBeNull();
+  });
+
+  it("the flag defaults to off, so existing callers are unaffected", () => {
+    const panel = calibrationPanel(HAND_ROWS, OPTIONS);
+    expect(panel?.computable).toBe(true);
+    expect(near(panel?.ece, 0.2)).toBe(true);
+  });
+
+  it("computeReport carries the parse-derived ambiguity into the panel", () => {
+    // The full path: a duplicated score column in the paste → the flag on the
+    // ParseResult → the not-computable panel on the settled report.
+    const text = [
+      '{"example_id":"h1","judge_label":"pos","human_label":"pos","judge_score":0.9,"confidence":0.9}',
+      '{"example_id":"h2","judge_label":"pos","human_label":"neg","judge_score":0.1,"confidence":0.1}',
+      '{"example_id":"h3","judge_label":"neg","human_label":"neg","judge_score":0.6,"confidence":0.6}',
+    ].join("\n");
+    const report = computeReport(parseVerdicts(text).verdicts, {
+      seed: 42,
+      confidenceLevel: 0.95,
+      engine: "worker",
+      judgeScoreMode: "p-positive",
+      deadlineMs: 60_000,
+      deadlineAt: Date.now() + 60_000,
+      judgeScoreAmbiguous: parseVerdicts(text).judgeScoreAmbiguous,
+    });
+
+    expect(report.calibration?.computable).toBe(false);
+    expect(report.calibration?.ece).toBeNull();
+    expect(report.calibration?.brier).toBeNull();
+    expect(report.calibration?.reason).toBe(CALIBRATION_AMBIGUOUS_REASON);
+    // The rest of the report is untouched: κ, α and the CIs still settle.
+    expect(report.kappa).not.toBeNull();
+    expect(report.alphaPanel).not.toBeNull();
+  });
+
+  it("an unambiguous paste still computes the panel end to end", () => {
+    const text = [
+      '{"example_id":"h1","judge_label":"pos","human_label":"pos","judge_score":0.9}',
+      '{"example_id":"h2","judge_label":"pos","human_label":"neg","judge_score":0.1}',
+      '{"example_id":"h3","judge_label":"neg","human_label":"neg","judge_score":0.6}',
+    ].join("\n");
+    const parsed = parseVerdicts(text);
+    const report = computeReport(parsed.verdicts, {
+      seed: 42,
+      confidenceLevel: 0.95,
+      engine: "worker",
+      judgeScoreMode: "p-positive",
+      deadlineMs: 60_000,
+      deadlineAt: Date.now() + 60_000,
+      judgeScoreAmbiguous: parsed.judgeScoreAmbiguous,
+    });
+    expect(report.calibration?.computable).toBe(true);
+    expect(report.calibration?.reason).toBeNull();
   });
 });
 

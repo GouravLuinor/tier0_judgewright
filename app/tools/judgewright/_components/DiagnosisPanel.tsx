@@ -40,6 +40,15 @@ export function DiagnosisPanel() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /**
+   * A15 — "exactly one call in flight" made STRUCTURAL. The disabled button
+   * was the only guard, and a disabled button is a UI promise: two rapid
+   * dispatches in the same frame (a double-click that lands before React
+   * re-renders, a chord that re-enters `run`) could each start a request.
+   * This ref is the guard that does not depend on the render having happened
+   * yet — the second caller returns before a fetch exists.
+   */
+  const inFlightRef = useRef(false);
 
   const configured = isDiagnosisConfigured(apiKey);
 
@@ -62,6 +71,10 @@ export function DiagnosisPanel() {
       keyInputRef.current?.focus();
       return;
     }
+    // A15: the structural guard. Whatever the button is doing, a second call
+    // cannot start while one is in flight.
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     const controller = new AbortController();
     abortRef.current = controller;
     setDiagnosisState("loading");
@@ -90,6 +103,7 @@ export function DiagnosisPanel() {
       );
       setDiagnosisState("error");
     } finally {
+      inFlightRef.current = false;
       if (abortRef.current === controller) abortRef.current = null;
     }
   }, [apiKey, model, request, configured]);
@@ -98,6 +112,9 @@ export function DiagnosisPanel() {
 
   const purge = useCallback(() => {
     abortRef.current?.abort();
+    // A15: release the structural guard alongside the request it guarded, so
+    // a purge can never leave the panel unable to run again.
+    inFlightRef.current = false;
     setApiKey("");
     setResult(null);
     setErrorMessage(null);

@@ -11,15 +11,31 @@
  * of source columns plus a line number — so JSONL and CSV share a single
  * validation path. That shared path is what makes the report identical for the
  * same logical rows whichever form they arrived in (AC-28).
+ *
+ * A6 — a leading UTF-8 BOM is stripped ONCE at the top, for BOTH forms: the
+ * CSV tokenizer has always done it internally, and now the JSONL path does
+ * too, so a BOM-prefixed JSONL file keeps its FIRST row instead of failing
+ * the format sniff (a BOM before `{` read as "not jsonl") or the JSON parse.
+ *
+ * A10 — the row loop carries an OPTIONAL absolute wall-clock budget
+ * (`ParseOptions.deadlineAt`), so a paste that cannot be materialized in time
+ * settles a `capacity` error VALUE instead of holding the calling thread
+ * (the main thread, on the fallback path) for as long as it likes.
  */
 
-import { parseCsvRecords } from "./csv";
-import { MAX_COLS, MAX_PARSE_ISSUES, MAX_ROWS } from "./constants";
-import { familyOf, normalizeLabel, vocabularyError } from "./labels";
+import { parseCsvRecords, stripBom } from "./csv.ts";
+import {
+  MAX_COLS,
+  MAX_PARSE_ISSUES,
+  MAX_ROWS,
+  PARSE_DEADLINE_CHECK_ROWS,
+} from "./constants.ts";
+import { familyOf, normalizeLabel, vocabularyError } from "./labels.ts";
 import type {
   ColumnMapping,
   ParseIssue,
   ParseIssueClass,
+  ParseOptions,
   ParseResult,
   RawVerdict,
   VerdictFormat,
@@ -465,7 +481,8 @@ function hardErrorResult(
   format: VerdictFormat,
   columns: string[],
   mapping: ColumnMapping,
-  warnings: string[]
+  warnings: string[],
+  judgeScoreAmbiguous: boolean
 ): ParseResult {
   return {
     verdicts: [],
@@ -478,6 +495,7 @@ function hardErrorResult(
     columns,
     mapping,
     warnings,
+    judgeScoreAmbiguous,
   };
 }
 
@@ -488,14 +506,32 @@ function hardErrorResult(
  * vocabularies, capacity, single-column input, ambiguity on an id/label slot)
  * returns `verdicts: []` with the issue attached, so the caller settles the
  * error envelope instead of a partial report.
+ *
+ * A6 — the BOM is stripped here, once, for BOTH forms. Without it a
+ * BOM-prefixed JSONL paste sniffs as CSV (a BOM before `{` is not a `{`) and
+ * then dies on the CSV header check, losing every row to a byte no user typed.
+ *
+ * A10 — `options.deadlineAt` arms the wall-clock budget. When it trips the
+ * parse returns a `capacity` hard error naming the rows it DID materialize,
+ * so the caller settles an honest error instead of a half-built report.
  */
-export function parseVerdicts(text: string): ParseResult {
-  const format = detectFormat(text);
+export function parseVerdicts(text: string, options: ParseOptions = {}): ParseResult {
+  // A6: strip one leading BOM before anything looks at the text.
+  const source = stripBom(text);
+  const format = detectFormat(source);
   const issues: ParseIssue[] = [];
   const warnings: string[] = [];
   const verdicts: RawVerdict[] = [];
   /** The HONEST total; `issues` keeps only the first MAX_PARSE_ISSUES. */
   let issueCount = 0;
+  /**
+   * A12: two columns/keys claiming the `judge_score` slot. Legal on the
+   * labels, fatal to the calibration panel's meaning — plumbed to
+   * `computeReport` so the panel is reported not computable.
+   */
+  let judgeScoreAmbiguous = false;
+  /** A10: the absolute wall-clock boundary, when the caller arms one. */
+  const deadlineAt = options.deadlineAt;
 
   const push = (entry: ParseIssue) => {
     issueCount += 1;
@@ -508,7 +544,7 @@ export function parseVerdicts(text: string): ParseResult {
   let rows: RawRow[] = [];
 
   if (format === "csv") {
-    const records = parseCsvRecords(text);
+    const records = parseCsvRecords(source);
     columns = records[0]?.fields ?? [];
     mapping = mapColumns(columns);
 
@@ -518,7 +554,8 @@ export function parseVerdicts(text: string): ParseResult {
         format,
         columns,
         mapping,
-        warnings
+        warnings,
+        judgeScoreAmbiguous
       );
 
     if (columns.length <= 1) {
@@ -539,6 +576,9 @@ export function parseVerdicts(text: string): ParseResult {
       if (HARD_AMBIGUITY_SLOTS.includes(conflict.slot)) {
         return hardFail("ambiguity", reason, conflict.columns[0]);
       }
+      // A12: a duplicated judge_score column is legal on the labels, but the
+      // score it would feed the calibration panel no longer has ONE meaning.
+      if (conflict.slot === "judgeScore") judgeScoreAmbiguous = true;
       warnings.push(reason);
     }
     if (
@@ -570,7 +610,7 @@ export function parseVerdicts(text: string): ParseResult {
       });
     }
   } else {
-    rows = jsonlRows(text);
+    rows = jsonlRows(source);
   }
 
   // ── Rows ────────────────────────────────────────────────────────────────
@@ -579,7 +619,36 @@ export function parseVerdicts(text: string): ParseResult {
   const rawLabelOrder: string[] = [];
   const familyFirstLine = new Map<string, number>();
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    if (row === undefined) continue;
+
+    // A10: the wall-clock budget, checked on an amortized cadence so a 200k
+    // paste does not pay a clock read per row. On a trip the parse STOPS and
+    // settles a capacity error naming the rows it materialized — never a
+    // partial report the caller would mistake for a complete one.
+    if (
+      deadlineAt !== undefined &&
+      rowIndex % PARSE_DEADLINE_CHECK_ROWS === 0 &&
+      Date.now() > deadlineAt
+    ) {
+      const budget = options.budgetMs === undefined ? "" : ` in ${options.budgetMs} ms`;
+      return hardErrorResult(
+        [
+          issue(
+            row.line,
+            "capacity",
+            `line ${row.line}: parsing exceeded its time budget${budget} after ${verdicts.length.toLocaleString("en-US")} rows — split the paste or use the Web Worker path`
+          ),
+        ],
+        format,
+        columns,
+        mapping,
+        warnings,
+        judgeScoreAmbiguous
+      );
+    }
+
     if (verdicts.length >= MAX_ROWS) {
       // Cap BEFORE analysis: stop materializing, keep counting honestly.
       continue;
@@ -606,11 +675,20 @@ export function parseVerdicts(text: string): ParseResult {
         continue;
       }
       if (conflict) {
-        // A duplicated judge_score slot is legal on the labels; it makes the
-        // calibration panel not computable (SPEC §2.1.5, D3's panel).
-        warnings.push(
-          `line ${row.line}: two keys map to ${SLOT_LABELS[conflict.slot]} — the calibration panel is not computable`
-        );
+        // A12: a duplicated judge_score slot is legal on the labels, but the
+        // score column no longer has ONE meaning, so the calibration panel is
+        // not computable. Any OTHER duplicated slot names what actually
+        // happened instead of borrowing the calibration panel's story.
+        if (conflict.slot === "judgeScore") {
+          judgeScoreAmbiguous = true;
+          warnings.push(
+            `line ${row.line}: two keys map to ${SLOT_LABELS[conflict.slot]} — the calibration panel is not computable`
+          );
+        } else {
+          warnings.push(
+            `line ${row.line}: two keys map to ${SLOT_LABELS[conflict.slot]} — the first one is used`
+          );
+        }
       }
     } else if (row.fieldCount !== columns.length) {
       push(
@@ -658,7 +736,8 @@ export function parseVerdicts(text: string): ParseResult {
         format,
         columns,
         mapping,
-        warnings
+        warnings,
+        judgeScoreAmbiguous
       );
     }
   }
@@ -681,5 +760,6 @@ export function parseVerdicts(text: string): ParseResult {
     columns,
     mapping,
     warnings,
+    judgeScoreAmbiguous,
   };
 }

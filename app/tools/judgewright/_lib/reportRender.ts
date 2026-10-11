@@ -19,6 +19,10 @@
  * engine-independent). A count derived from that window is therefore labelled
  * with its scope, while `agreementTotal`/`disagreementTotal` carry the TRUE
  * full-set figures the export prints.
+ *
+ * A8 — `degradedNoticeCopy` lives here, beside the other copy the UI prints,
+ * so the claim the fallback banner makes can be asserted without a browser:
+ * it is chosen by `report.ciDropped`, never asserted unconditionally.
  */
 
 import { bootstrapTierCopy } from "./bootstrapCI.ts";
@@ -257,6 +261,40 @@ export function renderAgreementJsonl(report: CalibrationReport): string {
  * The markdown report card the Copy button ships: headline figures, the
  * deflation, the binary metrics, the k-class table and the receipt.
  */
+/**
+ * A8 — the fallback banner's copy, CHOSEN BY WHAT ACTUALLY HAPPENED to the
+ * intervals rather than asserted unconditionally.
+ *
+ * The sync fallback runs the same pure core, so the POINT statistics are
+ * identical to a worker run. The intervals are NOT, when the stricter
+ * `SYNC_DEADLINE_MS` budget drops them (and it is the stricter budget, and it
+ * now has to cover the parse too — A10). "Every number is identical" is
+ * therefore only true when `ciDropped` is false; when it is true the banner
+ * has to say the intervals were capped, which is what this returns.
+ *
+ * `null` is the "we do not know yet" case (the banner can render before the
+ * first settle): it says less rather than claiming a number it cannot see.
+ */
+export function degradedNoticeCopy(ciDropped: boolean | null): string {
+  if (ciDropped === true) {
+    return (
+      "Worker unavailable — computing on the main thread. Same core, same " +
+      "point statistics; the stricter sync budget capped the bootstrap CIs, " +
+      "so the intervals are omitted for this run."
+    );
+  }
+  if (ciDropped === false) {
+    return (
+      "Worker unavailable — computing on the main thread. Every number is " +
+      "identical; only the engine badge differs."
+    );
+  }
+  return (
+    "Worker unavailable — computing on the main thread. The report settles " +
+    "from the same core; the stricter sync budget may cap the bootstrap CIs."
+  );
+}
+
 export function renderMarkdownReport(report: CalibrationReport): string {
   const lines: string[] = [];
   lines.push("# Judgewright — calibration report card");

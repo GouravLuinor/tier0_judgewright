@@ -27,6 +27,16 @@ function connectSrcOrigins(csp: string): string[] {
   return directive.split(/\s+/).slice(1);
 }
 
+/** The values of any directive, `"img-src"` included. */
+function directiveValues(csp: string, name: string): string[] {
+  const directive = csp
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name} `) || part === name);
+  if (!directive) throw new Error(`CSP has no ${name} directive`);
+  return directive.split(/\s+/).slice(1);
+}
+
 describe("shipped security headers", () => {
   it("carries the full verbatim header set", async () => {
     const headers = await securityHeaders();
@@ -75,6 +85,75 @@ describe("shipped security headers", () => {
       expect(scriptSrc).not.toContain("unsafe-eval");
     } else {
       expect(scriptSrc).toContain("unsafe-eval");
+    }
+  });
+});
+
+/**
+ * A7 — `img-src` is held to the SAME rule as `connect-src`: every value must
+ * be a declared origin or one of the two inline schemes the UI itself
+ * produces. The avatar hosts that used to sit here were undeclared AND unused
+ * (nothing in the app requests them), so they were dropped; this block is what
+ * stops one drifting back in — an allow-list entry nobody uses is an egress
+ * path with no owner.
+ */
+describe("img-src vs DECLARED_ORIGINS (no undeclared image origin)", () => {
+  /** The inline schemes `img-src` may carry beyond DECLARED_ORIGINS. */
+  const IMG_SCHEMES = ["data:", "blob:"] as const;
+
+  it("allows only declared origins and the inline schemes", async () => {
+    const headers = await securityHeaders();
+    const values = directiveValues(
+      headers.get("Content-Security-Policy") ?? "",
+      "img-src"
+    );
+
+    for (const value of values) {
+      const allowed =
+        DECLARED_ORIGINS.includes(value) ||
+        (IMG_SCHEMES as readonly string[]).includes(value);
+      expect(allowed, `undeclared img-src value: ${value}`).toBe(true);
+    }
+  });
+
+  it("carries 'self' plus data: and blob:, and nothing else", async () => {
+    const headers = await securityHeaders();
+    const values = directiveValues(
+      headers.get("Content-Security-Policy") ?? "",
+      "img-src"
+    );
+
+    // 'self' is always present; the two schemes cover the data-URI icon and
+    // the blob: object URL the download path creates.
+    expect(values).toContain("'self'");
+    expect(values).toContain("data:");
+    expect(values).toContain("blob:");
+    expect(values).toEqual(["'self'", "data:", "blob:"]);
+  });
+
+  it("never names an avatar / CDN host that is not in DECLARED_ORIGINS", async () => {
+    const headers = await securityHeaders();
+    const values = directiveValues(
+      headers.get("Content-Security-Policy") ?? "",
+      "img-src"
+    );
+
+    // The regression guard, stated as the subset relation it actually is:
+    // every host-bearing value must be one of the DECLARED origins. The
+    // avatar hosts that used to live here (googleusercontent, githubusercontent)
+    // were never in DECLARED_ORIGINS and nothing fetches them, so the shipped
+    // header now carries NO host at all — and this assertion is what keeps it
+    // that way.
+    const hosts = values.filter((value) => value.includes("://"));
+    for (const host of hosts) {
+      expect(DECLARED_ORIGINS, `undeclared img-src host: ${host}`).toContain(host);
+    }
+    // img-src ⊆ DECLARED_ORIGINS ∪ {data:, blob:}
+    for (const value of values) {
+      expect(
+        DECLARED_ORIGINS.includes(value) || IMG_SCHEMES.includes(value as never),
+        `img-src value outside DECLARED_ORIGINS ∪ schemes: ${value}`
+      ).toBe(true);
     }
   });
 });

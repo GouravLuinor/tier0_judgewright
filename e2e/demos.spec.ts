@@ -285,6 +285,61 @@ test.describe("Judgewright live-compute demos", () => {
     });
   });
 
+  // ── A8: the fallback banner must not overclaim ───────────────────────────
+  test("A8: the report pane's degraded banner names what actually happened to the CIs", async ({
+    page,
+  }) => {
+    // Degrade on purpose (same seam as the journey above): Worker throws, so
+    // the hook runs the pure core on the main thread under SYNC_DEADLINE_MS.
+    await page.addInitScript(() => {
+      class BrokenWorker {
+        constructor() {
+          throw new Error("Worker blocked for the A8 degraded-copy journey");
+        }
+      }
+      Object.defineProperty(window, "Worker", {
+        configurable: true,
+        writable: true,
+        value: BrokenWorker,
+      });
+    });
+
+    await gotoReady(page);
+    await expect(reportState(page)).toHaveAttribute(
+      "data-report-state",
+      "ready",
+      { timeout: COMPUTE_TIMEOUT }
+    );
+
+    const notice = page.locator("[data-degraded-notice]");
+    await expect(notice).toBeVisible({ timeout: BOUNDED_TIMEOUT });
+    await expect(notice).toContainText(
+      /Worker unavailable — computing on the main thread/i
+    );
+
+    // The report's own `ciDropped` state decides the copy, so the two can
+    // never disagree: the κ CI cell carries `data-ci` only while the interval
+    // exists, and the dedicated `[data-ci-dropped]` notice exists only when it
+    // was dropped. The banner has to say whichever is true.
+    const ciPresent = await page
+      .locator('[data-stat="kappa"]')
+      .getAttribute("data-ci");
+    const droppedNotice = await page
+      .locator("[data-ci-dropped]")
+      .count();
+
+    if (ciPresent !== null && droppedNotice === 0) {
+      // The sync budget held: the CIs are present, so "identical" is TRUE.
+      await expect(notice).toContainText("Every number is identical");
+      await expect(notice).not.toContainText("capped the bootstrap CIs");
+    } else {
+      // The CIs were dropped — the case the old copy got wrong. It now says so.
+      await expect(notice).toContainText("capped the bootstrap CIs");
+      await expect(notice).toContainText("the point statistics");
+      await expect(notice).not.toContainText("Every number is identical");
+    }
+  });
+
   test("clear: wipes the paste and settles an honest empty state", async ({
     page,
   }) => {
