@@ -2,8 +2,8 @@
 
 Every number below was **measured for real** on the reference box, by running the shipped code,
 with `npm run bench`. Nothing here is aspirational, and no number is extrapolated: the table is
-a transcript of that command's output for a specific run, and the reproduce command is at the
-bottom so any figure can be re-derived.
+a transcript of that command's output for the run recorded on **2026-10-11**, and the
+reproduce command is at the bottom so any figure can be re-derived.
 
 ## Machine & method
 
@@ -40,23 +40,23 @@ report.
 
 | Rows | Chars | B | αB | Watchdog | n | Median | p95 | Median (budget lifted) | CIs dropped |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1,000 | 188,669 | 2,000 | 2,000 | 3,000 ms | 11 | **18.53 ms** | 21.86 ms | 18.54 ms | 0/11 |
-| 20,000 | 3,866,669 | 2,000 | 2,000 | 8,000 ms | 9 | **231.45 ms** | 301.31 ms | 236.49 ms | 0/9 |
-| 50,000 | 9,716,669 | 2,000 | 2,000 | 8,000 ms | 9 | **585.34 ms** | 618.11 ms | 603.93 ms | 0/9 |
-| 100,000 | 19,466,669 | 1,000 | 250 | 8,000 ms | 9 | **872.96 ms** | 945.45 ms | 885.03 ms | 0/9 |
-| 150,000 | 29,366,669 | 500 | 250 | 8,000 ms | 7 | **1,120.57 ms** | 1,202.92 ms | 1,031.77 ms | 0/7 |
-| 200,000 | 39,266,669 | 500 | 250 | 8,000 ms | 7 | **1,361.33 ms** | 1,492.87 ms | 1,529.10 ms | **7/7** |
+| 1,000 | 188,669 | 2,000 | 2,000 | 3,000 ms | 11 | **16.19 ms** | 21.60 ms | 11.88 ms | 0/11 |
+| 20,000 | 3,866,669 | 2,000 | 2,000 | 8,000 ms | 9 | **222.22 ms** | 231.13 ms | 224.18 ms | 0/9 |
+| 50,000 | 9,716,669 | 2,000 | 2,000 | 8,000 ms | 9 | **588.82 ms** | 630.61 ms | 560.82 ms | 0/9 |
+| 100,000 | 19,466,669 | 1,000 | 250 | 8,000 ms | 9 | **859.87 ms** | 961.21 ms | 830.72 ms | 0/9 |
+| 150,000 | 29,366,669 | 500 | 250 | 8,000 ms | 7 | **997.44 ms** | 1,122.42 ms | 1,023.86 ms | **1/7** |
+| 200,000 | 39,266,669 | 500 | 250 | 8,000 ms | 7 | **1,328.82 ms** | 1,488.48 ms | 1,436.66 ms | **7/7** |
 
 ### Narrow payload (≈68 chars/row)
 
 | Rows | Chars | B | αB | Watchdog | n | Median | p95 | Median (budget lifted) | CIs dropped |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1,000 | 65,889 | 2,000 | 2,000 | 3,000 ms | 11 | **14.98 ms** | 18.10 ms | 9.87 ms | 0/11 |
-| 20,000 | 1,348,889 | 2,000 | 2,000 | 5,000 ms | 9 | **191.55 ms** | 199.90 ms | 191.93 ms | 0/9 |
-| 50,000 | 3,388,889 | 2,000 | 2,000 | 8,000 ms | 9 | **483.46 ms** | 558.61 ms | 488.54 ms | 0/9 |
-| 100,000 | 6,788,889 | 1,000 | 250 | 8,000 ms | 9 | **648.93 ms** | 709.19 ms | 662.64 ms | 0/9 |
-| 150,000 | 10,238,889 | 500 | 250 | 8,000 ms | 7 | **758.36 ms** | 833.02 ms | 727.93 ms | 0/7 |
-| 200,000 | 13,688,889 | 500 | 250 | 8,000 ms | 7 | **1,011.24 ms** | 1,068.26 ms | 1,002.55 ms | 0/7 |
+| 1,000 | 65,889 | 2,000 | 2,000 | 3,000 ms | 11 | **9.81 ms** | 13.25 ms | 9.89 ms | 0/11 |
+| 20,000 | 1,348,889 | 2,000 | 2,000 | 5,000 ms | 9 | **183.25 ms** | 188.11 ms | 183.08 ms | 0/9 |
+| 50,000 | 3,388,889 | 2,000 | 2,000 | 8,000 ms | 9 | **473.40 ms** | 478.26 ms | 499.51 ms | 0/9 |
+| 100,000 | 6,788,889 | 1,000 | 250 | 8,000 ms | 9 | **613.03 ms** | 676.98 ms | 626.34 ms | 0/9 |
+| 150,000 | 10,238,889 | 500 | 250 | 8,000 ms | 7 | **747.51 ms** | 790.35 ms | 756.99 ms | **1/7** |
+| 200,000 | 13,688,889 | 500 | 250 | 8,000 ms | 7 | **1,019.80 ms** | 1,052.96 ms | 1,006.36 ms | 0/7 |
 
 ## The 200k reality — a dispatch settles; the CIs are what the budget buys
 
@@ -64,39 +64,41 @@ This is the part worth reading carefully, because two different budgets are in p
 are not the same budget.
 
 - The **watchdog** is a hard wall against an unkillable hang. It is **tiered by payload size**
-  (`watchdogMsFor`): the 8,000 ms wall covers every paste above 2,000,000 characters — between
-  200,000 and 2,000,000 the tier is 5,000 ms, and only below 20,000 characters is it the flat
-  1,500 ms this document used to promise. Both 200k payloads above (13.7 MB and 39.3 MB) land
-  in the 8,000 ms tier.
+  (`watchdogMsFor`): `≤20,000 chars → 1,500 ms` · `≤200,000 → 3,000 ms` · `≤2,000,000 → 5,000 ms`
+  · above → `8,000 ms`. Both 200k payloads above (13.7 MB and 39.3 MB) land in the 8,000 ms tier.
 - The **cooperative budget** is 1,000 ms (`WORKER_DEADLINE_MS`), checked at phase boundaries
   and every 128 bootstrap replicates. A trip **drops the CIs** and names it (`ciDropped`);
   it never changes a point statistic, `B` or the baseline.
 
 So at 200,000 rows:
 
-1. **The dispatch always settles.** Measured median 1,011 ms (narrow) and 1,361 ms (wide)
-   against an 8,000 ms watchdog tier — 5.9× and 7.9× of headroom. The `e2e/perf.spec.ts` journey
+1. **The dispatch always settles.** Measured median 1,020 ms (narrow) and 1,329 ms (wide)
+   against an 8,000 ms watchdog tier — 7.8× and 6.0× of headroom. The `e2e/perf.spec.ts` journey
    *"A2: a 200k dispatch settles a report — never an abort"* proves it in the real browser and
    accepts either CI outcome by design.
-2. **The 1,000 ms cooperative budget is genuinely exceeded** at that size, by 1% (narrow) to
-   36% (wide). At wide/200k the budget trips and the CIs are dropped in **7 of 7** runs; the
-   point statistics, the grade, the Δκ deflation and the receipt are unaffected and the copy
-   says the CIs were omitted.
-3. **The narrow/200k row is the interesting boundary.** Its median (1,011.24 ms) is 1.1% over
-   the budget, yet the CIs survived 7 of 7 runs — because the deadline is only re-checked
-   every 128 replicates, and at `B = 500` the run finished between checks. This is the one row
-   in the table whose outcome is a **distribution rather than a constant**: across three runs
-   of `npm run bench` on this box, the narrow/200k budgeted dispatch measured
-   **1,080.21 ms with CIs dropped in 6 of 7 runs**, **1,071.78 ms with 2 of 7**, and
-   **1,011.24 ms with 0 of 7** (the run recorded above). **The honest statement is that the
-   narrow-200k dispatch sits on the budget boundary, not comfortably inside it.**
-4. At 150,000 wide rows the same three runs measured **1,272.88 ms (CIs dropped 4/7)**,
-   **1,206.07 ms (1/7)** and the recorded **1,120.57 ms (0/7)**; at 100,000 wide rows they
-   measured 938.11 ms (0/9), 1,131.20 ms (4/9) and 872.96 ms (0/9). Same effect: the deadline
-   is a sampling, not a wall, so near the boundary the outcome varies with the run. What does
-   *not* vary is that a trip drops CIs only — the point statistics, the grade and the receipt
-   settle identically every time, and `e2e/perf.spec.ts` asserts the 200k dispatch always
-   settles.
+2. **The 1,000 ms cooperative budget is exceeded** at that size, by a run-dependent margin:
+   narrow/200k lands **1.1% to 8.0% over** the budget across the four runs on this box
+   (1,011.24 ms–1,080.21 ms; 1,019.80 ms in this run), wide/200k further over at **32.9%**
+   (1,328.82 ms) in this run, and whether the CIs survive varies with the run — 6/7, 2/7, 0/7
+   and 0/7 dropped on narrow/200k across those four runs. At wide/200k the budget trips and the
+   CIs are dropped in **7 of 7** runs; the point statistics, the grade, the Δκ deflation and
+   the receipt are unaffected and the copy says the CIs were omitted.
+3. **The narrow/200k row is the interesting boundary.** Its median in this run (1,019.80 ms)
+   is 2.0% over the budget, yet the CIs survived 7 of 7 runs — because the deadline is only
+   re-checked every 128 replicates, and at `B = 500` the run finished between checks. This is
+   the one row in the table whose outcome is a **distribution rather than a constant**: across
+   four runs of `npm run bench` on this box, the narrow/200k budgeted dispatch measured
+   **1,080.21 ms with CIs dropped in 6 of 7 runs**, **1,071.78 ms with 2 of 7**,
+   **1,011.24 ms with 0 of 7**, and **1,019.80 ms with 0 of 7** (this run). **The honest
+   statement is that the narrow-200k dispatch sits on the budget boundary, not comfortably
+   inside it.**
+4. At 150,000 wide rows the four runs measured **1,272.88 ms (CIs dropped 4/7)**,
+   **1,206.07 ms (1/7)**, **1,120.57 ms (0/7)** and this run's **997.44 ms (1/7)**; at 100,000
+   wide rows they measured 938.11 ms (0/9), 1,131.20 ms (4/9), 872.96 ms (0/9) and this run's
+   859.87 ms (0/9). Same effect: the deadline is a sampling, not a wall, so near the boundary
+   the outcome varies with the run. What does *not* vary is that a trip drops CIs only — the
+   point statistics, the grade and the receipt settle identically every time, and
+   `e2e/perf.spec.ts` asserts the 200k dispatch always settles.
 
 **Absolute numbers on a shared, virtualized box move by a few percent between runs.** The
 tier table, the watchdog tiers, `B`, `alphaB` and every determinism guarantee below are exact
@@ -112,32 +114,32 @@ the κ+α bootstrap bundle alone at the tier the row count selects.
 
 | Rows | Parse median | p95 | Point stats median | p95 | κ+α bundle median | p95 |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1,000 | 3.07 ms | 4.66 ms | 1.26 ms | 1.34 ms | 13.16 ms | 13.51 ms |
-| 20,000 | 66.17 ms | 70.91 ms | 15.12 ms | 21.39 ms | 129.93 ms | 483.66 ms |
-| 50,000 | 162.78 ms | 254.61 ms | 48.29 ms | 52.83 ms | 334.27 ms | 354.32 ms |
-| 100,000 | 375.72 ms | 472.26 ms | 114.17 ms | 174.37 ms | 336.66 ms | 341.22 ms |
-| 150,000 | 477.97 ms | 604.05 ms | 131.09 ms | 235.82 ms | 270.22 ms | 298.42 ms |
-| 200,000 | 702.43 ms | 784.38 ms | 200.94 ms | 321.28 ms | 368.59 ms | 381.87 ms |
+| 1,000 | 2.97 ms | 71.47 ms | 1.20 ms | 3.14 ms | 7.16 ms | 13.48 ms |
+| 20,000 | 69.43 ms | 112.59 ms | 13.38 ms | 20.60 ms | 128.32 ms | 137.80 ms |
+| 50,000 | 157.06 ms | 205.13 ms | 42.02 ms | 44.29 ms | 319.29 ms | 327.85 ms |
+| 100,000 | 325.87 ms | 409.56 ms | 108.71 ms | 196.50 ms | 336.03 ms | 350.48 ms |
+| 150,000 | 482.84 ms | 540.86 ms | 130.63 ms | 198.34 ms | 252.27 ms | 263.87 ms |
+| 200,000 | 621.01 ms | 725.32 ms | 180.75 ms | 294.41 ms | 343.13 ms | 356.13 ms |
 
 ### Narrow payload (≈68 chars/row)
 
 | Rows | Parse median | p95 | Point stats median | p95 | κ+α bundle median | p95 |
 |---:|---:|---:|---:|---:|---:|---:|
-| 1,000 | 2.12 ms | 2.66 ms | 0.90 ms | 1.22 ms | 7.51 ms | 9.70 ms |
-| 20,000 | 45.32 ms | 49.85 ms | 11.28 ms | 19.51 ms | 129.86 ms | 135.04 ms |
-| 50,000 | 112.77 ms | 121.12 ms | 34.43 ms | 85.10 ms | 332.60 ms | 337.78 ms |
-| 100,000 | 232.94 ms | 276.29 ms | 73.71 ms | 110.06 ms | 332.82 ms | 335.70 ms |
-| 150,000 | 358.56 ms | 418.88 ms | 115.20 ms | 144.00 ms | 257.57 ms | 266.44 ms |
-| 200,000 | 470.91 ms | 541.09 ms | 151.01 ms | 213.29 ms | 360.02 ms | 376.45 ms |
+| 1,000 | 2.05 ms | 3.22 ms | 0.89 ms | 1.10 ms | 7.00 ms | 8.70 ms |
+| 20,000 | 44.28 ms | 49.98 ms | 10.63 ms | 19.57 ms | 125.10 ms | 129.22 ms |
+| 50,000 | 106.52 ms | 114.02 ms | 33.93 ms | 85.56 ms | 322.00 ms | 329.04 ms |
+| 100,000 | 231.30 ms | 243.37 ms | 70.54 ms | 105.57 ms | 323.94 ms | 327.36 ms |
+| 150,000 | 336.83 ms | 390.64 ms | 118.57 ms | 196.08 ms | 254.48 ms | 257.31 ms |
+| 200,000 | 450.69 ms | 516.59 ms | 155.79 ms | 200.88 ms | 356.79 ms | 362.43 ms |
 
 Three facts this breakdown establishes:
 
 - **The parse is the dominant cost at scale**, not the statistics. At wide/200k the parse is
-  702 ms of a 1,361 ms dispatch (52%); at narrow/100k it is 233 ms of 649 ms (36%). That is why
+  621 ms of a 1,329 ms dispatch (47%); at narrow/100k it is 231 ms of 613 ms (38%). That is why
   `parseVerdicts` is allocation-conscious and why the character cap is a budget, not decoration.
 - **Phase A (every point statistic: confusion, TPR/TNR/precision/recall/F1, unweighted and
   weighted κ, α at all three levels, the baseline, the grade, the deflation, the receipt and
-  the per-example rows) is 0.9–201 ms** across the whole range — cheap, and always run.
+  the per-example rows) is 0.9–181 ms** across the whole range — cheap, and always run.
 - **α shares the κ resample, so it has no separate bill.** The bundle measured above already
   includes α at its replicate tier (`alphaB` in the table). `bootstrapBundle` drives accuracy,
   κ and α from **one** index draw and **one** fused accumulate pass, each statistic derived

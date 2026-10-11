@@ -164,7 +164,7 @@ settle over the full set, the receipt names the tier (`B 500`), the CIs are eith
 honestly dropped with the disclosed copy, and the table strip reads
 `showing 2,000 of 200,000 rows`. The companion test proves the exported totals are the true
 counts. The measured wall-clock reality behind that guarantee is in
-[BENCHMARKS.md](BENCHMARKS.md): median 1,011 ms (narrow) / 1,361 ms (wide) against an 8,000 ms
+[BENCHMARKS.md](BENCHMARKS.md): median 1,020 ms (narrow) / 1,329 ms (wide) against an 8,000 ms
 watchdog tier, so the watchdog never fires and the report always settles.
 
 ### 8. Sibling-tool claim discipline
@@ -178,7 +178,7 @@ same kind as a wrong number.
 
 ## Bundle budget
 
-First Load JS for `/tools/judewright` is **199 kB** against the 200 kB ceiling from
+First Load JS for `/tools/judgewright` is **199 kB** against the 200 kB ceiling from
 `context.md` §4.1 — about **1 kB of headroom**, route 93 kB over a 103 kB shared chunk. Two
 things keep it there: the tool ships **no animation runtime** (toasts and menus use the design
 system's own CSS transitions, capped at 300 ms), and the diagnosis panel — the only module
@@ -190,9 +190,9 @@ that could pull in a network path — is loaded on demand, so it is never in the
 |---|---|
 | **No selector UI for the α level or the ECE binning.** `ComputeOptions` carries `alphaLevel` (`nominal` / `ordinal` / `interval`) + `labelOrder` and `bins` / `binMode`, and the engine implements and guards all of them — but nothing in the UI sets them, so the engine runs **nominal α** and **equal-width, 10-bin ECE**. The report card names the level and the binning it actually used instead of letting a reader assume. The `judge_score` semantics selector and the positive-class selector *are* wired, because they change the meaning of a number already on screen. |
 | **First-Load headroom is ~1 kB** (199 kB of the 200 kB budget). Any new first-paint dependency must displace something or be code-split. |
-| **≈190,000 critique-bearing rows is the real row ceiling, not 200,000.** `MAX_ROWS` (200,000) and `MAX_INPUT_CHARS` (40,000,000) multiply, so the binding limit is `min(200,000, 40,000,000 ÷ chars-per-row)`. Measured ceilings on this box: 212,011 rows at 188.7 chars/row, 176,468 rows at 226.7 chars/row, ≈195,000 at the ~205 chars/row a critique-bearing session is documented to cost. An over-limit paste is rejected with its true size named, never silently truncated. |
+| **≈190,000 critique-bearing rows is the real row ceiling, not 200,000.** `MAX_ROWS` (200,000) and `MAX_INPUT_CHARS` (40,000,000) multiply, so the binding limit is `min(200,000, 40,000,000 ÷ chars-per-row)`. Only one ceiling is probed: the bench's capacity probe (A16, `npm run bench`) measures 188.7 chars/row on its wide payload and reports 212,011 rows. The other two are derived, never probed — `floor(40,000,000 ÷ chars-per-row)` arithmetic on a documented width: 176,468 rows at 226.7 chars/row (critique text one clause longer), and ≈195,000 rows at the ~205 chars/row a critique-bearing session is documented to cost. An over-limit paste is rejected with its true size named, never silently truncated. |
 | **The main-thread fallback carries a bounded parse (A10).** On that path only, the parse loop re-reads the clock every 512 rows under the 800 ms sync budget and settles a `capacity` error *value* instead of freezing the thread. The worker path parses unbudgeted by design, under its tiered watchdog. |
-| **Near the 1,000 ms cooperative budget the CI outcome is a distribution, not a constant.** At wide/200k the budget trips (CIs dropped 7/7 in the recorded run); at narrow/200k the median is 1.1% over the budget and across three runs the CIs dropped in 6/7, 2/7 and 0/7 of runs, because the deadline is sampled every 128 replicates. Point statistics, the grade, the deflation and the receipt settle identically in every case. |
+| **Near the 1,000 ms cooperative budget the CI outcome is a distribution, not a constant.** At wide/200k the budget trips (CIs dropped 7/7 in the recorded run); at narrow/200k the median is 2.0% over the budget in the recorded run and has ranged 1.1%–8.0% over across the four runs on this box, where the CIs dropped in 6/7, 2/7, 0/7 and 0/7 of runs, because the deadline is sampled every 128 replicates. Point statistics, the grade, the deflation and the receipt settle identically in every case. |
 | **Pixel baselines are skipped by policy.** The 2 skipped tests in `e2e/visual.spec.ts` are green-or-skipped per the bar: never red on stale goldens, and they need a human to regenerate the images. |
 | **Absolute bench numbers move a few percent between runs.** The reference box is shared and virtualized (WSL2). The tier table, watchdog tiers, `B`, `alphaB` and every determinism guarantee are exact; the milliseconds are not. |
 | **No browser-matrix CI.** Playwright runs Chromium only, on one worker. Firefox/WebKit browsers are installed locally but not exercised in CI. |
