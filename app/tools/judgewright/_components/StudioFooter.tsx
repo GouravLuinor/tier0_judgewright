@@ -19,7 +19,7 @@ export function StudioFooter() {
 
   return (
     <footer className="mt-8 border-t border-surface-border bg-canvas/40">
-      <div className="mx-auto w-full max-w-7xl px-4 py-12 md:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1536px] px-4 py-12 md:px-8 lg:px-10">
         <div className="flex flex-col gap-10 md:flex-row md:justify-between md:gap-16">
           <div className="max-w-sm">
             <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">

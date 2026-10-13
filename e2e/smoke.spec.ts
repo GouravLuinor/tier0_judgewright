@@ -123,6 +123,9 @@ test.describe("Judgewright shell journeys", () => {
     // The engine badge proves the result came back through the Web Worker.
     await expect(station(page).getByText("worker", { exact: true })).toBeVisible();
 
+    // Navigate to the Verdict stage to inspect the report card
+    await page.getByRole("button", { name: /verdict/i }).first().click();
+
     // The seeded fixture is 12 binary rows, 9 agreements / 3 disagreements.
     // Human marginals 9/3, judge marginals 8/4 ⇒ A=9, S=84, κ = (9·12−84)/(12²−84)
     // = 0.4, raw agreement 75.0%, always-majority baseline 75.0% — the Δκ
@@ -193,6 +196,9 @@ test.describe("Judgewright shell journeys", () => {
     await expect(page.locator('[data-engine="worker"]')).toBeVisible({
       timeout: COMPUTE_TIMEOUT,
     });
+
+    // Navigate to Verdict stage to inspect numbers
+    await page.getByRole("button", { name: /verdict/i }).first().click();
 
     // The report card shows the expected agreement / κ / chance baseline.
     await expect(
@@ -404,6 +410,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     const pane = page.locator('[data-report-state="ready"]');
     await expect(pane).toBeVisible({ timeout: COMPUTE_TIMEOUT });
 
+    // Navigate to Verdict stage to inspect headline and grade
+    await page.getByRole("button", { name: /verdict/i }).first().click();
+
     // Headline numbers, against the pinned references.
     await expect(pane.locator('[data-stat="agreement"]')).toContainText("95.0%");
     await expect(pane.locator('[data-stat="kappa"]')).toContainText(
@@ -421,6 +430,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     await expect(pane.locator("[data-grade]")).toContainText(
       "Landis–Koch convention applied to unweighted κ"
     );
+
+    // Navigate to Confusion Matrix stage to inspect Alpha panel
+    await page.getByRole("button", { name: /matrix/i }).first().click();
 
     // The α panel: the panel figure, the human-ceiling honesty and the
     // mandatory κ-vs-α disclosure (AC-34 / AC-50).
@@ -443,6 +455,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     await expect(
       alphaPanel.locator("[data-alpha-ci-restriction]")
     ).toContainText("resamples a single judge-vs-first-human pair");
+
+    // Navigate to Disagreements stage to inspect table
+    await page.getByRole("button", { name: /disagreements/i }).first().click();
 
     // The disagreement table: windowed, honest about the window, and it does
     // contain the 50 rows where human and judge disagree.
@@ -509,6 +524,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
       timeout: COMPUTE_TIMEOUT,
     });
 
+    // Navigate to Export stage to access Diagnosis panel
+    await page.getByRole("button", { name: /export/i }).first().click();
+
     // The panel is present and off — a real report settles with no BYOK call.
     await expect(diagnosisPanel(page)).toContainText("1 call, not logged");
     expect(hits).toBe(0);
@@ -528,6 +546,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
       timeout: COMPUTE_TIMEOUT,
     });
+
+    // Navigate to Export stage to access Diagnosis panel
+    await page.getByRole("button", { name: /export/i }).first().click();
 
     const getButton = page.locator('[data-testid="diagnosis-get"]');
     await expect(getButton).toHaveText("Configure a key");
@@ -571,6 +592,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
       timeout: COMPUTE_TIMEOUT,
     });
+
+    // Navigate to Export stage to access Diagnosis panel
+    await page.getByRole("button", { name: /export/i }).first().click();
 
     await page
       .locator('[data-testid="diagnosis-key-input"]')

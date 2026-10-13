@@ -5,7 +5,7 @@ export function KnowledgeHub() {
   return (
     <section
       id="guide"
-      className="mx-auto w-full max-w-7xl px-4 py-16 md:px-6 lg:px-8 scroll-mt-20"
+      className="mx-auto w-full max-w-[1536px] px-4 py-16 md:px-8 lg:px-10 scroll-mt-20"
     >
       <div className="max-w-3xl">
         <h2 className="text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">

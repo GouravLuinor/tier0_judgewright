@@ -26,6 +26,8 @@ export interface AuthState {
   session: Session | null;
   isAuthenticated: boolean;
   signInWith: (provider: OAuthProvider) => Promise<boolean>;
+  signInWithEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyEmailOtp: (email: string, token: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -102,6 +104,32 @@ export function useAuth(): AuthState {
     return !error;
   }, []);
 
+  const signInWithEmail = useCallback(async (email: string) => {
+    const client = await getSupabaseClient();
+    if (!client) return { success: false, error: "Auth is not configured." };
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin + "/tools/judgewright",
+      },
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  }, []);
+
+  const verifyEmailOtp = useCallback(async (email: string, token: string) => {
+    const client = await getSupabaseClient();
+    if (!client) return { success: false, error: "Auth is not configured." };
+    const { data, error } = await client.auth.verifyOtp({
+      email,
+      token,
+      type: "email",
+    });
+    if (error) return { success: false, error: error.message };
+    if (data.session) setSession(data.session);
+    return { success: true };
+  }, []);
+
   const signOut = useCallback(async () => {
     const client = await getSupabaseClient();
     if (!client) return;
@@ -115,6 +143,8 @@ export function useAuth(): AuthState {
     session,
     isAuthenticated: Boolean(session),
     signInWith,
+    signInWithEmail,
+    verifyEmailOtp,
     signOut,
   };
 }

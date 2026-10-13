@@ -64,6 +64,8 @@ function guardedLocalStorage(): StateStorage {
 }
 
 /** Screen-reader announcement payload; `seq` keys re-renders of identical text. */
+export type StageId = "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export";
+
 export interface StatusAnnouncement {
   message: string;
   seq: number;
@@ -115,11 +117,16 @@ interface ToolState {
   /** True when the last settle came from the main-thread fallback. */
   degraded: boolean;
 
-  // ── Transient UI chrome (never persisted) ────────────────────────────────
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   isSamplesOpen: boolean;
   setSamplesOpen: (open: boolean) => void;
+
+  activeStage: "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export";
+  setActiveStage: (stage: "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export") => void;
+
+  workbenchTab: "scorecard" | "calibration" | "inspector" | "audit";
+  setWorkbenchTab: (tab: "scorecard" | "calibration" | "inspector" | "audit") => void;
 
   /** Screen-reader announcements for async pipeline transitions. */
   statusAnnouncement: StatusAnnouncement | null;
@@ -194,6 +201,12 @@ export const useToolStore = create<ToolState>()(
 
       isSamplesOpen: false,
       setSamplesOpen: (isSamplesOpen) => set({ isSamplesOpen }),
+
+      activeStage: "ingestion",
+      setActiveStage: (activeStage) => set({ activeStage }),
+
+      workbenchTab: "scorecard",
+      setWorkbenchTab: (workbenchTab) => set({ workbenchTab }),
 
       statusAnnouncement: null,
       announceStatus: (message) =>

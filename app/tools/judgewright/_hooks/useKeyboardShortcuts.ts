@@ -28,6 +28,42 @@ export function useKeyboardShortcuts() {
 
       const key = e.key.toLowerCase();
 
+      if (e.key === "1") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("ingestion");
+        return;
+      }
+
+      if (e.key === "2") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("verdict");
+        return;
+      }
+
+      if (e.key === "3") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("matrix");
+        return;
+      }
+
+      if (e.key === "4") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("disagreements");
+        return;
+      }
+
+      if (e.key === "5") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("bias");
+        return;
+      }
+
+      if (e.key === "6") {
+        e.preventDefault();
+        useToolStore.getState().setActiveStage("export");
+        return;
+      }
+
       if (key === "k" && !e.shiftKey) {
         e.preventDefault();
         setCommandPaletteOpen(!isCommandPaletteOpen);

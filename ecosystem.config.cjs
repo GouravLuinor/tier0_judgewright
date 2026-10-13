@@ -10,9 +10,9 @@ module.exports = {
   apps: [
     {
       name: "judge-norai",
-      cwd: "/var/www/judgewright",
-      script: "node",
-      args: ".next/standalone/server.js",
+      cwd: "/var/www/judge",
+      script: "npm",
+      args: "start -- -p 3005",
       instances: 1,
       exec_mode: "fork",
       autorestart: true,

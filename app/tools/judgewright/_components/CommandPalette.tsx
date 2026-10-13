@@ -113,6 +113,72 @@ export function CommandPalette() {
   const commands = useMemo<CommandItem[]>(() => {
     const navigation: CommandItem[] = [
       {
+        id: "stage-ingestion",
+        title: "Stage 1: Ingestion & Dataset Preview",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘1",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("ingestion");
+          close();
+        },
+      },
+      {
+        id: "stage-verdict",
+        title: "Stage 2: Headline Reliability Verdict",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘2",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("verdict");
+          close();
+        },
+      },
+      {
+        id: "stage-matrix",
+        title: "Stage 3: Confusion & Alignment Matrix",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘3",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("matrix");
+          close();
+        },
+      },
+      {
+        id: "stage-disagreements",
+        title: "Stage 4: Failure & Disagreement Inspector",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘4",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("disagreements");
+          close();
+        },
+      },
+      {
+        id: "stage-bias",
+        title: "Stage 5: Calibration & Bias Diagnostics",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘5",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("bias");
+          close();
+        },
+      },
+      {
+        id: "stage-export",
+        title: "Stage 6: Reproducibility Receipt & Export",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        keycap: "⌘6",
+        onSelect: () => {
+          useToolStore.getState().setActiveStage("export");
+          close();
+        },
+      },
+      {
         id: "nav-workstation",
         title: "Go to Workstation",
         category: "Navigation",
