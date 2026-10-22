@@ -31,5 +31,5 @@
 - [TokenCraft](https://tokens.norai.tech): token counter and LLM cost calculator
 - [SchemaCraft](https://schema.norai.tech): JSON to Zod, Pydantic and TypeScript types
 - [RegexCraft](https://regex.norai.tech): regex tester with plain-English explanations
-- [Anchorflow](https://anchorflow.norai.tech): pin and audit GitHub Actions workflows
+- [Anchorflow](https://anchor.norai.tech): pin and audit GitHub Actions workflows
 - [Smart Rozgar](https://rozgar.norai.tech): Sarkari job alerts in Hindi and English
