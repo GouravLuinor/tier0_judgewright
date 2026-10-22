@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { isStaleReply } from "../useToolWorker";
+import { isReadyMessage, isStaleReply } from "../useToolWorker";
 import { analyzeVerdicts } from "../../_lib/analyze";
 import {
   MAX_TABLE_ROWS,
   SYNC_DEADLINE_MS,
   WATCHDOG_MS,
   WATCHDOG_TIERS,
+  WORKER_BOOT_TIMEOUT_MS,
   WORKER_DEADLINE_MS,
+  watchdogAbortCopy,
   watchdogMsFor,
 } from "../../_lib/constants";
 import { reportDisagreementWindow } from "../../_lib/report";
@@ -276,7 +278,7 @@ describe("abort — the watchdog settle is atomic (A5)", () => {
     });
     useToolStore.getState().applyComputation({
       ok: false,
-      error: "Execution aborted — the compute budget was exceeded",
+      error: watchdogAbortCopy(WATCHDOG_MS),
       degraded: false,
       stats: null,
     } satisfies ComputationResult);
@@ -285,14 +287,14 @@ describe("abort — the watchdog settle is atomic (A5)", () => {
     const state = useToolStore.getState();
     expect(state.stats).toBeNull();
     expect(state.disagreementWindow).toBeNull();
-    expect(state.errorMessage).toBe("Execution aborted — the compute budget was exceeded");
+    expect(state.errorMessage).toBe(watchdogAbortCopy(WATCHDOG_MS));
     expect(state.parseIssues).toEqual([]);
     for (const frame of frames) {
       expect(frame.stats === null || frame.error === null).toBe(true);
     }
     // The announcement names the rejection rather than a stale success.
     expect(state.statusAnnouncement?.message).toContain(
-      "Analysis rejected: Execution aborted"
+      "No report: Analysis did not finish within its 1.5 s limit"
     );
   });
 
@@ -323,5 +325,34 @@ describe("dispatch — the payload shape the hook posts", () => {
     };
     expect(Object.keys(input).sort()).toEqual(["id", "rubric", "settings", "verdictsText"]);
     expect(input.id).toBe(1);
+  });
+});
+
+describe("worker readiness handshake — load time is never compute time", () => {
+  it("recognises only the ready message, never a result envelope", () => {
+    expect(isReadyMessage({ type: "ready" })).toBe(true);
+    const envelope: WorkerOutputPayload = {
+      id: 1,
+      ok: true,
+      error: null,
+      degraded: false,
+      stats: null,
+      issues: [],
+      issueCount: 0,
+      disagreementWindow: { offset: 0, rows: [], totalCount: 0 },
+    };
+    expect(isReadyMessage(envelope)).toBe(false);
+  });
+
+  it("gives a slow worker far longer to load than any watchdog tier", () => {
+    const longestTier = Math.max(...WATCHDOG_TIERS.map((tier) => tier.ms));
+    expect(WORKER_BOOT_TIMEOUT_MS).toBeGreaterThan(longestTier);
+  });
+
+  it("words the watchdog abort as a limit with a next step, not a rejection", () => {
+    const copy = watchdogAbortCopy(watchdogMsFor(250_000));
+    expect(copy).toContain("5 s limit");
+    expect(copy).toContain("Your rows are still here");
+    expect(copy.toLowerCase()).not.toContain("rejected");
   });
 });

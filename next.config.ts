@@ -9,9 +9,8 @@ import { DECLARED_ORIGINS } from "./app/tools/judgewright/_lib/constants";
 // CSP is the privacy moat in transport form: the app is fully client-side, so
 // every allowed origin here is one fewer egress path a payload could take.
 // connect-src is built from DECLARED_ORIGINS (the single documented list) —
-// 'self' plus the two optional flows, both user-initiated only:
+// 'self' plus the one optional, user-initiated flow:
 //   · Supabase hosts: optional OAuth (unset env keys → zero connections)
-//   · openrouter.ai: the ONE opt-in BYOK diagnosis call, never automatic
 // The default path therefore contacts nothing beyond its own origin, and the
 // e2e request guard (AC-20) proves it by failing on any non-localhost request.
 // - unsafe-inline styles are required by Next's runtime CSS and the

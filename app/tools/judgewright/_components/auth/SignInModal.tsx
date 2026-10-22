@@ -36,24 +36,18 @@ export function SignInModal() {
     if (isAuthenticated)
       return {
         title: "You're signed in",
-        description: `Signed in as ${email ?? "your account"}. Exports and saved presets are unlocked.`,
+        description: `Signed in as ${email ?? "your account"}. Judgewright works the same either way; the account is shared across Nor AI tools.`,
       };
     if (trigger === "export")
       return {
-        title: "Sign in to export the full bundle",
+        title: "Report downloaded",
         description:
-          "Exporting every language at once uses a free Nor AI account. Core regex work stays free forever.",
-      };
-    if (trigger === "return-visit")
-      return {
-        title: "Welcome back to Judgewright",
-        description:
-          "Sign in to sync saved presets and history across your devices.",
+          "Optional: sign in with a free Nor AI account to use one login across Nor AI's tools. Nothing in Judgewright needs it.",
       };
     return {
-      title: "Sign in to Judgewright",
+      title: "Sign in to Nor AI",
       description:
-        "Connect with Google, GitHub, or your email to unlock bundle export and cross-device preset sync.",
+        "Optional. Every analysis and export in Judgewright works without an account; signing in keeps one login across Nor AI's tools.",
     };
   }, [isAuthenticated, email, trigger]);
 
@@ -124,22 +118,22 @@ export function SignInModal() {
         }
       }}
     >
-      <DialogContent className="max-w-md shadow-elevated border border-surface-border bg-surface-base text-zinc-100">
+      <DialogContent className="max-w-md shadow-pop border border-line bg-panel text-ink">
         <DialogHeader>
           <div
-            className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-surface-border bg-surface-elevated text-brand-lime"
+            className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-[3px] border border-line bg-sunk text-select-ink"
             aria-hidden="true"
           >
             <Lock className="h-5 w-5" />
           </div>
-          <DialogTitle className="text-center text-lg font-bold text-zinc-100">{copy.title}</DialogTitle>
-          <DialogDescription className="mt-2 text-center text-sm leading-relaxed text-zinc-400">
+          <DialogTitle className="text-center text-lg font-bold text-ink">{copy.title}</DialogTitle>
+          <DialogDescription className="mt-2 text-center text-sm leading-relaxed text-ink-3">
             {copy.description}
           </DialogDescription>
         </DialogHeader>
 
         {authError && (
-          <div role="alert" className="mt-2 rounded-lg border border-brand-rose/30 bg-brand-rose/10 px-3 py-2 text-xs text-brand-rose">
+          <div role="alert" className="mt-2 rounded-[3px] border border-miss/30 bg-miss/10 px-3 py-2 text-xs text-miss-ink">
             {authError}
           </div>
         )}
@@ -152,7 +146,7 @@ export function SignInModal() {
                 await signOut();
                 close();
               }}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-surface-border bg-surface-subtle text-sm font-medium text-zinc-200 transition-all duration-150 ease-out-expo hover:border-surface-borderHover hover:bg-surface-elevated hover:text-brand-rose active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-[3px] border border-line bg-sunk text-sm font-medium text-ink transition-all duration-150 ease-out-expo hover:border-line-strong hover:bg-sunk hover:text-miss-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select/70 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Sign out
             </button>
@@ -166,7 +160,7 @@ export function SignInModal() {
                   type="button"
                   disabled={!isConfigured || pending !== null}
                   onClick={() => handleProvider(provider.id)}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-surface-border bg-surface-subtle text-sm font-medium text-zinc-200 transition-all duration-150 ease-out-expo hover:border-surface-borderHover hover:bg-surface-elevated active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[3px] border border-line bg-sunk text-sm font-medium text-ink transition-all duration-150 ease-out-expo hover:border-line-strong hover:bg-sunk focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select/70 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {pending === provider.id ? (
                     <Loader2
@@ -184,20 +178,20 @@ export function SignInModal() {
             </div>
 
             <div className="relative my-1 flex items-center justify-center">
-              <span className="w-full border-t border-surface-border" />
-              <span className="absolute bg-surface-base px-2.5 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">
+              <span className="w-full border-t border-line" />
+              <span className="absolute bg-panel px-2.5 text-[11px] font-medium text-ink-3 uppercase tracking-wider">
                 or with email
               </span>
             </div>
 
             {emailSent ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-brand-lime/30 bg-brand-lime/10 p-4 text-xs">
+              <div className="flex flex-col gap-3 rounded-[3px] border border-select/30 bg-select/10 p-4 text-xs">
                 <div className="text-center">
-                  <p className="font-semibold text-brand-lime">Check your inbox</p>
-                  <p className="mt-1 text-zinc-300">
-                    We sent a sign-in link &amp; code to <strong className="text-zinc-100">{emailInput}</strong>.
+                  <p className="font-semibold text-select-ink">Check your inbox</p>
+                  <p className="mt-1 text-ink-2">
+                    We sent a sign-in link &amp; code to <strong className="text-ink">{emailInput}</strong>.
                   </p>
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  <p className="mt-1 text-[11px] text-ink-3">
                     Click the link in your email, or enter the 6-digit code:
                   </p>
                 </div>
@@ -211,12 +205,12 @@ export function SignInModal() {
                     onChange={(e) => setOtpCode(e.target.value)}
                     placeholder="123456"
                     disabled={otpPending}
-                    className="h-10 flex-1 rounded-lg border border-surface-border bg-surface-subtle px-3 text-center font-mono text-sm tracking-widest text-zinc-100 placeholder:text-zinc-500 focus:border-brand-lime focus:outline-none focus:ring-1 focus:ring-brand-lime"
+                    className="h-10 flex-1 rounded-[3px] border border-line bg-sunk px-3 text-center font-mono text-sm tracking-widest text-ink placeholder:text-ink-3 focus:border-select focus:outline-none focus:ring-1 focus:ring-select"
                   />
                   <button
                     type="submit"
                     disabled={otpPending || !otpCode.trim()}
-                    className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-lime px-4 text-xs font-semibold text-black transition-transform hover:opacity-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-10 items-center justify-center rounded-[3px] bg-select px-4 text-xs font-semibold text-white transition-colors hover:bg-select/90 dark:text-bezel disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {otpPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -233,7 +227,7 @@ export function SignInModal() {
                     setOtpCode("");
                     setAuthError(null);
                   }}
-                  className="mt-1 text-center text-[11px] text-zinc-400 hover:text-zinc-200 underline"
+                  className="mt-1 text-center text-[11px] text-ink-3 hover:text-ink underline"
                 >
                   Use a different email
                 </button>
@@ -247,12 +241,12 @@ export function SignInModal() {
                     onChange={(e) => setEmailInput(e.target.value)}
                     placeholder="name@example.com"
                     disabled={!isConfigured || emailPending}
-                    className="h-10 flex-1 rounded-lg border border-surface-border bg-surface-subtle px-3 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-brand-lime focus:outline-none focus:ring-1 focus:ring-brand-lime disabled:opacity-50"
+                    className="h-10 flex-1 rounded-[3px] border border-line bg-sunk px-3 text-xs text-ink placeholder:text-ink-3 focus:border-select focus:outline-none focus:ring-1 focus:ring-select disabled:opacity-50"
                   />
                   <button
                     type="submit"
                     disabled={!isConfigured || emailPending || !emailInput}
-                    className="inline-flex h-10 items-center justify-center rounded-lg bg-brand-lime px-4 text-xs font-semibold text-black transition-transform hover:opacity-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-10 items-center justify-center rounded-[3px] bg-select px-4 text-xs font-semibold text-white transition-colors hover:bg-select/90 dark:text-bezel disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {emailPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -265,7 +259,7 @@ export function SignInModal() {
             )}
 
             {!isConfigured && (
-              <p className="mt-1 rounded-lg border border-brand-amber/30 bg-brand-amber/10 px-3 py-2 text-xs leading-relaxed text-brand-amber">
+              <p className="mt-1 rounded-[3px] border border-caution/30 bg-caution/10 px-3 py-2 text-xs leading-relaxed text-caution-ink">
                 Everything in Judgewright works without an account — sign-in only
                 powers cross-device sync.
               </p>

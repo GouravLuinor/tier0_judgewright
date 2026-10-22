@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { copyTextToClipboard } from "@/lib/utils";
-import { toast } from "@/components/ui/toast";
-import { renderOneLineVerdict } from "../_lib/reportRender";
+import { copyOneLineVerdict } from "../_components/report/exportActions";
 import { useToolStore } from "../_store/useToolStore";
 
 /**
  * The required keyboard set (BAR §2.6):
  *   ⌘K / ⌃K  toggle the command palette
  *   ⌘P / ⌃P  toggle the inline samples menu
- *   ⌘⇧C / ⌃⇧C  copy the current output (lime success · rose failure toast)
+ *   ⌘⇧C / ⌃⇧C  copy the one-line verdict (success or failure toast)
  *   ⌘↵ / ⌃↵  focus the primary input (rAF-deferred)
  */
 export function useKeyboardShortcuts() {
@@ -28,42 +26,6 @@ export function useKeyboardShortcuts() {
 
       const key = e.key.toLowerCase();
 
-      if (e.key === "1") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("ingestion");
-        return;
-      }
-
-      if (e.key === "2") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("verdict");
-        return;
-      }
-
-      if (e.key === "3") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("matrix");
-        return;
-      }
-
-      if (e.key === "4") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("disagreements");
-        return;
-      }
-
-      if (e.key === "5") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("bias");
-        return;
-      }
-
-      if (e.key === "6") {
-        e.preventDefault();
-        useToolStore.getState().setActiveStage("export");
-        return;
-      }
-
       if (key === "k" && !e.shiftKey) {
         e.preventDefault();
         setCommandPaletteOpen(!isCommandPaletteOpen);
@@ -80,18 +42,7 @@ export function useKeyboardShortcuts() {
         if (!stats) return;
         e.preventDefault();
         // ⌘⇧C ships the ONE-LINE verdict: judging-the-judge in a single line.
-        void copyTextToClipboard(renderOneLineVerdict(stats.report)).then(
-          (succeeded) => {
-            if (succeeded) {
-              toast({
-                title: "Verdict copied",
-                description: "the one-line verdict",
-              });
-            } else {
-              toast({ title: "Copy failed", variant: "destructive" });
-            }
-          }
-        );
+        void copyOneLineVerdict(stats.report);
         return;
       }
 

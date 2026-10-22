@@ -1,12 +1,12 @@
 # Judgewright
 
-> **Calibration instrument for the LLM judge you already ship.** Paste a rubric and a set of
+> **Calibration instrument for the LLM judge you already ship.** Paste a set of
 > verdicts as JSONL or CSV; Judgewright returns a report card with error bars — chance-corrected
 > agreement, Krippendorff's α, seeded reproducible bootstrap CIs, ECE/Brier, a letter grade — all
 > computed **in your browser**, with nothing sent anywhere.
 
-Part of the **Nor AI Tier-0** suite of independent developer workstations — machined
-Linear/Raycast-class UI (light + dark), off-main-thread compute, zero server sync of user
+Part of the **Nor AI Tier-0** suite of independent developer tools — a "Reference Target"
+UI (light + dark), off-main-thread compute, zero server sync of user
 payloads.
 
 | | |
@@ -104,12 +104,9 @@ length-preference flags — it reports:
 agreement JSONL, each copyable instantly (`⌘⇧C` too) plus a Download button. Export is never
 gated behind sign-in; the offer appears only after the file already exists.
 
-**One optional, opt-in LLM diagnosis** — off by default, `AUTO_DIAGNOSIS_ENABLED === false`.
-With no key the panel is a no-op that sends nothing. When *you* paste an OpenRouter key and
-press **Get diagnosis**, it fires **exactly one** request over ≤25 disagreement rows selected
-deterministically (confusion-cell frequency, round-robin across distinct cells), excerpts each
-field to a disclosed cap, is abortable mid-flight, and is **ephemeral**: the key lives only in
-that panel's React state — never in a store snapshot, never in `localStorage`, gone on reload.
+**No LLM calls.** The BYOK diagnosis panel was removed in the 2026-10 redesign (owner
+decision). The engine `_services/llmDiagnosis.ts` and its tests stay in the repo as a dormant
+seam, but no UI imports it and `https://openrouter.ai` is no longer in the CSP.
 
 ---
 
@@ -125,16 +122,16 @@ that panel's React state — never in a store snapshot, never in `localStorage`,
   debounce tiers, a watchdog **tiered by payload size** (`watchdogMsFor`) so an in-cap 200k-row
   dispatch settles instead of being aborted at the small-paste wall, and one honest degradation
   path that runs the *same* pure core on the main thread.
-- **One page that hosts everything.** Sticky header → station `h1` + trust pills → one
-  workstation card → comparison → guide → FAQ → footer, centered at `max-w-7xl`.
-- **Matchlight design system.** Green-tinted neutral surface ladder, 1px hairline machine
-  rules, one reserved accent (brand-lime) worn only by measurement and control state; mono
-  reserved for machine data. Documented in [docs/DESIGN.md](docs/DESIGN.md).
-- **Instant copy everywhere.** Per-pane copy buttons plus `⌘⇧C`, with a brand-lime success
-  toast and a rose failure toast.
-- **100% client-side privacy on the default path.** Verdicts never leave the browser. No
-  telemetry on payload content. The auto-diagnosis flow is **off by default** and only ever
-  armed by a key *you* paste.
+- **One page that hosts everything.** Bezel header → `h1` + three promises → workstation
+  (verdicts 36% | report 64%) → disagreements → beyond κ → share → comparison → method → FAQ →
+  family footer.
+- **"Reference Target" design system.** A charcoal bezel, ColorChecker state patches with one
+  job each (agree, miss, caution, select), a six-step grey wedge for the agreement bands and a
+  split-patch confusion matrix. Archivo + Fragment Mono. Documented in [DESIGN.md](DESIGN.md)
+  with the sidecar `.impeccable/design.json`.
+- **Instant copy everywhere.** Copy verdict (`⌘⇧C`) on the report plus Copy card / one-liner /
+  JSONL in Share, with success and failure toasts.
+- **100% client-side privacy.** Verdicts never leave the browser. No telemetry, no LLM call.
 
 ---
 
@@ -180,7 +177,7 @@ npm run typecheck    # tsc --noEmit          — strict, zero errors
 npm run lint         # eslint .              — no-explicit-any + no-unused-vars as errors
 npm test             # vitest node env       — 361 tests / 24 files
 npm run build        # next build            — standalone artifact in .next/standalone
-npm run test:e2e     # playwright            — 48 passed / 2 skipped, real standalone server
+npm run test:e2e     # playwright            — 44 passed / 2 skipped, real standalone server
 npm run bench        # tsx scripts/bench.ts  — measured parse/compute/bootstrap timings
 npm run repro:seed   # node --experimental-strip-types — cross-process CI digest
 npm run repro:analyze
@@ -260,7 +257,7 @@ app/
     │   ├── presets.ts · guide.ts · authGate.ts · supabaseClient.ts
     │   └── __tests__/              # 21 suites + 2 cross-process repro entries
     ├── _services/
-    │   ├── llmDiagnosis.ts         # BAR §8 exception — the ONLY IO module in the tool
+    │   ├── llmDiagnosis.ts         # dormant BYOK seam; no UI imports it since the redesign
     │   └── __tests__/
     ├── _store/                     # useToolStore (persist content only) · useAuthPromptStore
     └── _workers/
@@ -268,7 +265,7 @@ app/
         └── __tests__/
 components/ui/                      # Tier-0 UI primitives (see docs/ui-kit.md)
 lib/utils.ts · lib/site.ts          # clipboard helper · FAQ + site content
-docs/ · e2e/ · design_tokens.json
+docs/ · e2e/ · DESIGN.md · .impeccable/design.json
 ```
 
 Layer rules (BAR §4.7): `_components` may import `_lib` and `_store`, **never the reverse**;
@@ -340,20 +337,15 @@ responsive contract — no horizontal overflow at 390 and 1440, single-column st
 - **Zero egress on the default path is a test, not a marketing line.**
   `e2e/visual.spec.ts` installs a request listener before navigation and fails CI if *any*
   non-localhost request is made during first paint **and** a full compute through the worker.
-  The optional diagnosis flow is off by default and is never armed automatically: with no key
-  the button is a configure-no-op that sends nothing.
-- **The BYOK key never leaves memory.** `_services/llmDiagnosis.ts` is the only module that
-  can perform network IO. It fires one request only on an explicit click, is abortable, and
-  the key lives in the panel's React state — never in a store snapshot, never in
-  `localStorage`, and gone on reload — the panel's own state goes with it.
+  `smoke.spec.ts` additionally asserts there is no diagnosis surface and no openrouter request.
 - **CSP** (`next.config.ts`, built from `DECLARED_ORIGINS` in `_lib/constants.ts`):
   `default-src 'self'` · `script-src 'self' 'unsafe-inline'` (+ `'unsafe-eval'` **dev only**)
   · `style-src 'self' 'unsafe-inline'` · `img-src 'self' data: blob:` · `font-src 'self' data:`
   · `connect-src 'self' https://*.supabase.co
-  wss://*.supabase.co https://openrouter.ai` · `worker-src 'self' blob:` ·
+  wss://*.supabase.co` · `worker-src 'self' blob:` ·
   `frame-ancestors 'none'` · `base-uri 'self'` · `form-action 'self'` · `object-src 'none'`.
-  The only non-`'self'` origins are the optional OAuth flow and the single opt-in BYOK
-  diagnosis call — both user-initiated, and both no-ops until you act. A static unit test
+  The only non-`'self'` origins are the optional OAuth flow, which is a no-op until the env
+  keys are set and you choose to sign in. A static unit test
   (`_lib/__tests__/csp.test.ts`) asserts the shipped header never allows an origin outside
   that documented list.
 - **Other headers:** HSTS `max-age=63072000; includeSubDomains; preload`, `nosniff`,
@@ -421,8 +413,8 @@ default** so the tool is zero-backend out of the box.
   one-call contract);
   `_hooks/__tests__/useJudgewrightWorker.test.ts` (13: debounce tiers, the tiered watchdog,
   the degrade path).
-- **E2E (Playwright, real standalone artifact, 48 passed / 2 skipped):**
-  `smoke.spec.ts` (shell journeys + the D2 report card + the diagnosis never being automatic),
+- **E2E (Playwright, real standalone artifact, 44 passed / 2 skipped):**
+  `smoke.spec.ts` (shell journeys + the D2 report card + no diagnosis surface),
   `demos.spec.ts` (live-compute demos, the degraded path with identical numbers, the quota
   guard, the atomic abort settle), `copy.spec.ts` (the copy path, both toast variants),
   `disagreements.spec.ts` (the window never masquerading as the total),
@@ -438,18 +430,16 @@ images.
 
 ## Bundle budget
 
-First Load JS for `/tools/judgewright` is **199 kB** against the 200 kB ceiling
-(`npm run build`: route `93 kB`, shared `103 kB`). Two things keep it there. The tool spends
+First Load JS for `/tools/judgewright` is **198 kB** against the 200 kB ceiling
+(`npm run build`: route `94.8 kB`, shared `103 kB`). Two things keep it there. The tool spends
 **no animation runtime** — toasts and menus use the design system's own CSS transitions,
-capped at 300 ms. And the diagnosis panel, the only module that could pull in a network path,
-is loaded **on demand**, so it is never part of the first paint of a tool whose promise is
-"100% in-browser". See [Limitations](#limitations) for the headroom this leaves.
+capped at 300 ms. And no network module ships in the page at all. See [Limitations](#limitations) for the headroom this leaves.
 
 ---
 
 ## Limitations (the honest list)
 
-- **First Load JS is 199 kB of the 200 kB budget — about 1 kB of headroom.** Any new
+- **First Load JS is 198 kB of the 200 kB budget — about 2 kB of headroom.** Any new
   first-paint dependency needs to displace something or be code-split.
 - **The row ceiling is a property of the two caps multiplying.** `MAX_ROWS` is 200,000 and
   `MAX_INPUT_CHARS` is 40,000,000, so the binding limit for a critique-bearing session is
@@ -470,8 +460,7 @@ is loaded **on demand**, so it is never part of the first paint of a tool whose 
   `capacity` parse error value rather than holding the thread. The worker path parses
   unbudgeted by design, under its tiered watchdog.
 - **Nothing is sent anywhere on the default path, per visit.** The only outbound request the
-  product can make on its own initiative is the one opt-in OpenRouter diagnosis (and Supabase
-  OAuth, when the env keys are configured). There is no telemetry, no shadow endpoint and no
+  product can make is Supabase OAuth, when the env keys are configured and you sign in. There is no telemetry, no shadow endpoint and no
   "anonymized" payload upload.
 - **The letter grade is a convention.** Landis–Koch bands over unweighted κ are printed with
   that disclosure everywhere a grade appears.

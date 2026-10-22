@@ -153,6 +153,23 @@ export function watchdogMsFor(chars: number): number {
   }
   return WATCHDOG_TIERS[WATCHDOG_TIERS.length - 1]?.ms ?? WATCHDOG_MS;
 }
+/**
+ * How long the worker may take to load before the hook gives up on it and
+ * computes on the main thread instead. Generous on purpose: on mobile data the
+ * worker chunk is a separate download, and the old behaviour (watchdog armed
+ * before the worker existed) settled the 12-row demo as "budget exceeded".
+ */
+export const WORKER_BOOT_TIMEOUT_MS = 20_000;
+
+/**
+ * The watchdog's user-facing copy: what happened, that nothing was lost, and
+ * what to do next. Seconds are printed from the tier that actually applied.
+ */
+export function watchdogAbortCopy(ms: number): string {
+  const seconds = (ms / 1000).toLocaleString("en-US", { maximumFractionDigits: 1 });
+  return `Analysis did not finish within its ${seconds} s limit. Your rows are still here: run it again, or split the file into smaller pastes.`;
+}
+
 /** Collapse typing bursts into one screen-reader update. */
 export const SUCCESS_ANNOUNCE_DEBOUNCE_MS = 800;
 
@@ -187,6 +204,9 @@ export const AUTO_DIAGNOSIS_ENABLED = false;
 
 /**
  * The single documented list of every origin allowed in `connect-src`.
+ * openrouter.ai left this list when the diagnosis panel left the UI
+ * (2026-10-22): the `_services` engine stays, but nothing on the page can
+ * call it, so the page is not allowed to reach it either.
  * `next.config.ts` builds the CSP from exactly this list, and the static
  * `csp.test.ts` asserts the shipped header never drifts past it.
  */
@@ -194,7 +214,6 @@ export const DECLARED_ORIGINS: readonly string[] = [
   "'self'",
   "https://*.supabase.co",
   "wss://*.supabase.co",
-  "https://openrouter.ai",
 ];
 
 /** Copy shown by the status strip while the optional diagnosis stays idle. */

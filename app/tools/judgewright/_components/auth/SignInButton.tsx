@@ -37,13 +37,9 @@ export function SignInButton() {
         aria-label={
           isAuthenticated ? `Account: ${email ?? "signed in"}` : "Sign in"
         }
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-surface-border bg-surface-subtle px-2.5 text-xs font-medium text-zinc-300 transition-all duration-150 ease-out-expo hover:border-surface-borderHover hover:bg-surface-elevated hover:text-zinc-200 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-9 items-center gap-1.5 rounded-[3px] px-2.5 text-sm text-bezel-muted transition-colors duration-150 hover:bg-bezel-raised hover:text-bezel-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select focus-visible:ring-offset-2 focus-visible:ring-offset-bezel"
       >
-        {isAuthenticated ? (
-          <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
-        ) : (
-          <GoogleMark />
-        )}
+        <UserRound className="h-4 w-4" aria-hidden="true" />
         <span className="hidden sm:inline" aria-hidden={isAuthenticated}>
           {isAuthenticated && initial ? initial : "Sign in"}
         </span>
@@ -52,15 +48,15 @@ export function SignInButton() {
       {showNotice && !isConfigured && (
         <div
           role="status"
-          className="fixed bottom-4 left-4 right-4 z-50 mx-auto w-full max-w-sm rounded-xl border border-surface-border bg-surface-default p-4 text-sm text-zinc-200 glass-edge"
+          className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm rounded-[3px] border border-line bg-panel p-4 text-sm text-ink shadow-pop"
         >
-          <p className="font-semibold text-zinc-100">
+          <p className="font-semibold text-ink">
             Sign-in isn&rsquo;t enabled yet
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            Judgewright runs entirely in your browser, so the core tool needs no
-            account. Connecting a Supabase project turns on bundle export and
-            cross-device preset sync.
+          <p className="mt-1 text-xs leading-relaxed text-ink-3">
+            Signing in is optional, and it isn&rsquo;t switched on for this
+            deployment. Every analysis and export on this page works without an
+            account.
           </p>
         </div>
       )}

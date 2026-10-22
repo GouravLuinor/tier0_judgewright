@@ -105,14 +105,18 @@ test.describe("Judgewright layout contract", () => {
   }) => {
     await gotoReady(page);
 
-    const ld = await page
+    // The page carries WebApplication and FAQPage blocks; find the FAQ one.
+    const blocks = await page
       .locator('script[type="application/ld+json"]')
-      .first()
-      .innerText();
-    const parsed = JSON.parse(ld) as {
-      "@type": string;
-      mainEntity: { name: string }[];
-    };
+      .allInnerTexts();
+    const parsed = blocks
+      .map((text) => JSON.parse(text) as { "@type": string; mainEntity: { name: string }[] })
+      .find((block) => block["@type"] === "FAQPage");
+    expect(parsed, "a FAQPage JSON-LD block").toBeDefined();
+    if (!parsed) return;
+    expect(
+      blocks.some((text) => (JSON.parse(text) as { "@type": string })["@type"] === "WebApplication")
+    ).toBe(true);
 
     expect(parsed["@type"]).toBe("FAQPage");
     expect(parsed.mainEntity.length).toBeGreaterThan(0);

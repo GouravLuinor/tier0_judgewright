@@ -122,8 +122,6 @@ test.describe("the disagreement table", () => {
     await expect(disagree).toBeVisible();
     await expect(disagree).toContainText("DISAGREE");
     await expect(disagree).toContainText("d-003");
-    // It wears the semantic amber (a disagreement is a warning, not an error).
-    await expect(disagree).toHaveClass(/text-brand-amber/);
 
     // A row with a second human rater says so rather than hiding it.
     await expect(table(page)).toContainText("(+1)");
@@ -208,11 +206,9 @@ test.describe("the disagreement table", () => {
   });
 
   test("the window never masquerades as the total (AC-59)", async ({ page }) => {
-    // The strip's total is the report's n, and the card states that n beside
-    // the window's own row count.
-    const card = page.getByRole("region", {
-      name: /calibration report card/i,
-    });
+    // The strip's total is the report's n, and the report's meta strip states
+    // that n beside the window's own row count.
+    const card = page.locator("#report-pane");
     await expect(card).toContainText(
       `n = ${FIXTURE.rows.toLocaleString("en-US")} rows`,
       { timeout: COMPUTE_TIMEOUT }

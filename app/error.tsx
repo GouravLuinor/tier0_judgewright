@@ -24,11 +24,11 @@ export default function Error({
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center px-4 py-16">
-      <div className="flex items-center gap-2 text-brand-rose">
+      <div className="flex items-center gap-2 text-miss-ink">
         <TriangleAlert className="h-5 w-5" aria-hidden="true" />
         <h1 className="text-lg font-semibold tracking-tight">Something broke</h1>
       </div>
-      <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+      <p className="mt-3 text-sm leading-relaxed text-ink-3">
         The workstation hit an unexpected error. Sessions are saved for reload
         only while the verdicts stay under{" "}
         {MAX_PERSISTED_TEXT_CHARS.toLocaleString("en-US")} characters — a larger
@@ -38,7 +38,7 @@ export default function Error({
       <button
         type="button"
         onClick={reset}
-        className="mt-6 inline-flex h-9 w-fit items-center justify-center rounded-lg border border-surface-border bg-surface-subtle px-4 text-sm font-medium text-zinc-200 transition-[background-color,border-color,color,transform] duration-150 ease-out-expo hover:border-surface-borderHover hover:bg-surface-elevated active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+        className="mt-6 inline-flex h-9 w-fit items-center justify-center rounded-[3px] border border-line bg-sunk px-4 text-sm font-medium text-ink transition-[background-color,border-color,color] duration-150 ease-out-expo hover:border-line-strong hover:bg-sunk focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select/70 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
       >
         Try again
       </button>

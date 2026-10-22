@@ -12,13 +12,15 @@ import {
   DEBOUNCE_XLARGE_MS,
   SUCCESS_ANNOUNCE_DEBOUNCE_MS,
   SYNC_DEADLINE_MS,
+  WORKER_BOOT_TIMEOUT_MS,
+  watchdogAbortCopy,
   watchdogMsFor,
 } from "../_lib/constants";
 import type {
   ComputationResult,
   DisagreementWindow,
   WorkerInputPayload,
-  WorkerOutputPayload,
+  WorkerMessage,
 } from "../_lib/types";
 import { useToolStore } from "../_store/useToolStore";
 
@@ -39,9 +41,9 @@ import { useToolStore } from "../_store/useToolStore";
 /** Neutral in-flight crash copy — never let the watchdog verdict fabricate one. */
 const WORKER_CRASH_ERROR = "Worker crashed — switched to main-thread mode";
 
-/** A2: the watchdog verdict — an honest budget story, never a fabricated one. */
-const WATCHDOG_ABORT_ERROR =
-  "Execution aborted — the compute budget was exceeded";
+/** Degradation notice when the worker never reported ready. */
+const WORKER_BOOT_NOTICE =
+  "Background worker did not start — computing on the main thread (same core, CIs capped)";
 
 /**
  * The stale-response guard (BAR §4.3), extracted so the worker protocol is
@@ -50,6 +52,11 @@ const WATCHDOG_ABORT_ERROR =
  */
 export function isStaleReply(replyId: number, currentRequestId: number): boolean {
   return replyId < currentRequestId;
+}
+
+/** The readiness handshake, extracted for the same reason as the guard above. */
+export function isReadyMessage(message: WorkerMessage): message is { type: "ready" } {
+  return "type" in message && message.type === "ready";
 }
 
 function debounceFor(length: number): number {
@@ -86,6 +93,15 @@ export function useToolWorker() {
 
   const degradedRef = useRef(false);
 
+  /** True once the current worker has posted its ready message. */
+  const workerReadyRef = useRef(false);
+  /** A dispatch held while the worker loads; the newest one wins. */
+  const pendingDispatchRef = useRef<number | null>(null);
+  const bootTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Latest dispatcher, so handshake/boot callbacks never close over a stale one. */
+  const postToWorkerRef = useRef<(id: number) => void>(() => {});
+  const runOnMainThreadRef = useRef<(id: number) => void>(() => {});
+
   // Rehydrate persisted user content after mount (skipHydration in store).
   // The resulting state change re-triggers the dispatch effect below.
   useEffect(() => {
@@ -103,6 +119,11 @@ export function useToolWorker() {
     debounceTimerRef.current = null;
   }, []);
 
+  const clearBootTimer = useCallback(() => {
+    if (bootTimerRef.current) clearTimeout(bootTimerRef.current);
+    bootTimerRef.current = null;
+  }, []);
+
   const clearSuccessAnnouncement = useCallback(() => {
     if (successAnnounceTimerRef.current)
       clearTimeout(successAnnounceTimerRef.current);
@@ -116,8 +137,10 @@ export function useToolWorker() {
   const degradeToMainThread = useCallback(
     (notice: string, inFlightError?: string) => {
       degradedRef.current = true;
+      workerReadyRef.current = false;
       clearDebounce();
       clearWatchdog();
+      clearBootTimer();
       clearSuccessAnnouncement();
       workerRef.current?.terminate();
       workerRef.current = null;
@@ -136,11 +159,19 @@ export function useToolWorker() {
         });
       }
       announceStatus(notice);
+      // A dispatch held for a worker that never became ready still settles:
+      // same core, main thread.
+      const pending = pendingDispatchRef.current;
+      pendingDispatchRef.current = null;
+      if (pending !== null && pending === requestIdRef.current) {
+        runOnMainThreadRef.current(pending);
+      }
     },
     [
       applyComputation,
       clearDebounce,
       clearWatchdog,
+      clearBootTimer,
       clearSuccessAnnouncement,
       setWorkerAvailable,
       setIsProcessing,
@@ -175,7 +206,19 @@ export function useToolWorker() {
   );
 
   const onWorkerMessage = useCallback(
-    (event: MessageEvent<WorkerOutputPayload>) => {
+    (event: MessageEvent<WorkerMessage>) => {
+      // Handshake: the worker is loaded. Release the held dispatch (if any)
+      // and only now start its watchdog.
+      if (isReadyMessage(event.data)) {
+        workerReadyRef.current = true;
+        clearBootTimer();
+        const pending = pendingDispatchRef.current;
+        pendingDispatchRef.current = null;
+        if (pending !== null && pending === requestIdRef.current) {
+          postToWorkerRef.current(pending);
+        }
+        return;
+      }
       // Stale-response guard FIRST: a late reply must never touch state or
       // the watchdog protecting a newer dispatch (the C1 race).
       if (isStaleReply(event.data.id, requestIdRef.current)) return;
@@ -184,7 +227,7 @@ export function useToolWorker() {
       setIsProcessing(false);
       handleResult(event.data, event.data.disagreementWindow);
     },
-    [clearWatchdog, handleResult, setIsProcessing]
+    [clearBootTimer, clearWatchdog, handleResult, setIsProcessing]
   );
 
   const onWorkerError = useCallback(() => {
@@ -215,6 +258,16 @@ export function useToolWorker() {
       worker.onmessage = onWorkerMessage;
       worker.onerror = onWorkerError;
       worker.onmessageerror = onWorkerMessageError;
+      workerReadyRef.current = false;
+      clearBootTimer();
+      // A worker that never loads (blocked chunk, hostile extension) must not
+      // leave the report spinning forever: fall back to the main thread and
+      // run whatever dispatch was waiting.
+      bootTimerRef.current = setTimeout(() => {
+        bootTimerRef.current = null;
+        if (workerReadyRef.current) return;
+        degradeToMainThread(WORKER_BOOT_NOTICE);
+      }, WORKER_BOOT_TIMEOUT_MS);
       return worker;
     } catch (err) {
       console.warn("Worker initialization failed:", err);
@@ -223,7 +276,13 @@ export function useToolWorker() {
       );
       return null;
     }
-  }, [onWorkerMessage, onWorkerError, onWorkerMessageError, degradeToMainThread]);
+  }, [
+    onWorkerMessage,
+    onWorkerError,
+    onWorkerMessageError,
+    degradeToMainThread,
+    clearBootTimer,
+  ]);
 
   useEffect(() => {
     const worker = spawnWorker();
@@ -235,6 +294,7 @@ export function useToolWorker() {
       workerRef.current = null;
       clearDebounce();
       clearWatchdog();
+      clearBootTimer();
       clearSuccessAnnouncement();
     };
   }, [
@@ -242,8 +302,98 @@ export function useToolWorker() {
     setWorkerAvailable,
     clearDebounce,
     clearWatchdog,
+    clearBootTimer,
     clearSuccessAnnouncement,
   ]);
+
+  // Posts dispatch `id` to a READY worker and arms its watchdog. Load time is
+  // never charged to the compute budget: the clock starts here.
+  postToWorkerRef.current = (id: number) => {
+    const worker = workerRef.current;
+    if (!worker) return;
+    const budgetMs = watchdogMsFor(inputRef.current.verdictsText.length);
+    // Watchdog: an unkillable hang inside the worker (a bug, or an
+    // extension-hostile environment) must never freeze the UI. A2: the
+    // budget is TIERED by payload size — an in-cap 200k-row dispatch
+    // legitimately needs seconds, and a flat 1.5s wall would abort it and
+    // discard a report AC-27/AC-59 promise.
+    watchdogIdRef.current = id;
+    watchdogRef.current = setTimeout(() => {
+      worker.terminate();
+      if (workerRef.current === worker) workerRef.current = null;
+      clearWatchdog();
+
+      // Bump the request id so any zombie response is stale by definition,
+      // then replace the worker unless we have already degraded.
+      requestIdRef.current++;
+      if (!degradedRef.current) {
+        workerRef.current = spawnWorker();
+      }
+
+      // A5: the abort settles ATOMICALLY through the store's one action —
+      // stats and the window are cleared in the same set() that records
+      // the error, so the previous paste's numbers never render beside it.
+      setIsProcessing(false);
+      applyComputation({
+        ok: false,
+        error: watchdogAbortCopy(budgetMs),
+        degraded: false,
+        stats: null,
+      });
+    }, budgetMs);
+
+    worker.postMessage({
+      id,
+      verdictsText: inputRef.current.verdictsText,
+      rubric: inputRef.current.rubric,
+      settings: inputRef.current.settings,
+    } satisfies WorkerInputPayload);
+  };
+
+  // Synchronous fallback path — identical semantics via the shared core.
+  //
+  // A10: `parseDeadlineArmed` is the ONE difference from the worker call,
+  // and it exists because this path runs ON THE MAIN THREAD: an unbounded
+  // parse of a pathological paste would freeze the UI for as long as it
+  // liked, with no watchdog able to save it (there is no thread to
+  // terminate). The parse therefore carries the SAME SYNC_DEADLINE_MS
+  // budget the compute phases already used, and trips into a capacity
+  // error VALUE instead of a freeze. The worker path is unaffected.
+  runOnMainThreadRef.current = (id: number) => {
+    try {
+      const result = analyzeVerdicts(inputRef.current.verdictsText, {
+        deadlineMs: SYNC_DEADLINE_MS,
+        engine: "main-thread",
+        parseDeadlineArmed: true,
+        seed: inputRef.current.settings.seed,
+        confidenceLevel: inputRef.current.settings.confidenceLevel,
+        judgeScoreMode: inputRef.current.settings.judgeScoreMode,
+        positiveClass: inputRef.current.settings.positiveClass,
+        labelOrder: inputRef.current.settings.labelOrder,
+      });
+      if (id !== requestIdRef.current) return;
+      setIsProcessing(false);
+      handleResult({
+        ok: result.ok,
+        error: result.ok ? null : result.error,
+        degraded: true,
+        stats: result.ok ? result.stats : null,
+        issues: result.ok ? [] : result.issues,
+        issueCount: result.ok ? 0 : result.issueCount,
+      });
+    } catch (err) {
+      clearSuccessAnnouncement();
+      // A5: an unexpected throw settles the same atomic way — the error and
+      // the cleared stats land together, never a stale card beside it.
+      applyComputation({
+        ok: false,
+        error:
+          err instanceof Error ? err.message : "Unexpected processing error",
+        degraded: true,
+        stats: null,
+      });
+    }
+  };
 
   // Dispatch work whenever the verdict session changes.
   useEffect(() => {
@@ -257,87 +407,17 @@ export function useToolWorker() {
       const worker = workerRef.current;
 
       if (!degradedRef.current && worker) {
-        // Watchdog: an unkillable hang inside the worker (a bug, or an
-        // extension-hostile environment) must never freeze the UI. A2: the
-        // budget is TIERED by payload size — an in-cap 200k-row dispatch
-        // legitimately needs seconds, and a flat 1.5s wall would abort it and
-        // discard a report AC-27/AC-59 promise.
-        watchdogIdRef.current = id;
-        watchdogRef.current = setTimeout(() => {
-          worker.terminate();
-          if (workerRef.current === worker) workerRef.current = null;
-          clearWatchdog();
-
-          // Bump the request id so any zombie response is stale by definition,
-          // then replace the worker unless we have already degraded.
-          requestIdRef.current++;
-          if (!degradedRef.current) {
-            workerRef.current = spawnWorker();
-          }
-
-          // A5: the abort settles ATOMICALLY through the store's one action —
-          // stats and the window are cleared in the same set() that records
-          // the error, so the previous paste's numbers never render beside it.
-          setIsProcessing(false);
-          applyComputation({
-            ok: false,
-            error: WATCHDOG_ABORT_ERROR,
-            degraded: false,
-            stats: null,
-          });
-        }, watchdogMsFor(inputRef.current.verdictsText.length));
-
-        worker.postMessage({
-          id,
-          verdictsText: inputRef.current.verdictsText,
-          rubric: inputRef.current.rubric,
-          settings: inputRef.current.settings,
-        } satisfies WorkerInputPayload);
+        if (workerReadyRef.current) {
+          postToWorkerRef.current(id);
+        } else {
+          // Still loading: hold the newest dispatch; the ready handshake
+          // posts it and only then starts the watchdog.
+          pendingDispatchRef.current = id;
+        }
         return;
       }
 
-      // Synchronous fallback path — identical semantics via the shared core.
-      //
-      // A10: `parseDeadlineArmed` is the ONE difference from the worker call,
-      // and it exists because this path runs ON THE MAIN THREAD: an unbounded
-      // parse of a pathological paste would freeze the UI for as long as it
-      // liked, with no watchdog able to save it (there is no thread to
-      // terminate). The parse therefore carries the SAME SYNC_DEADLINE_MS
-      // budget the compute phases already used, and trips into a capacity
-      // error VALUE instead of a freeze. The worker path is unaffected.
-      try {
-        const result = analyzeVerdicts(inputRef.current.verdictsText, {
-          deadlineMs: SYNC_DEADLINE_MS,
-          engine: "main-thread",
-          parseDeadlineArmed: true,
-          seed: inputRef.current.settings.seed,
-          confidenceLevel: inputRef.current.settings.confidenceLevel,
-          judgeScoreMode: inputRef.current.settings.judgeScoreMode,
-          positiveClass: inputRef.current.settings.positiveClass,
-          labelOrder: inputRef.current.settings.labelOrder,
-        });
-        if (id !== requestIdRef.current) return;
-        setIsProcessing(false);
-        handleResult({
-          ok: result.ok,
-          error: result.ok ? null : result.error,
-          degraded: true,
-          stats: result.ok ? result.stats : null,
-          issues: result.ok ? [] : result.issues,
-          issueCount: result.ok ? 0 : result.issueCount,
-        });
-      } catch (err) {
-        clearSuccessAnnouncement();
-        // A5: an unexpected throw settles the same atomic way — the error and
-        // the cleared stats land together, never a stale card beside it.
-        applyComputation({
-          ok: false,
-          error:
-            err instanceof Error ? err.message : "Unexpected processing error",
-          degraded: true,
-          stats: null,
-        });
-      }
+      runOnMainThreadRef.current(id);
     }, debounceFor(verdictsText.length));
 
     return () => {
