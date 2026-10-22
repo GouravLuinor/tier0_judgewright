@@ -63,7 +63,7 @@ export const FAMILY_TOOLS = [
   { name: "SchemaCraft", blurb: "JSON to Zod, Pydantic and TypeScript types", href: "https://schema.norai.tech" },
   { name: "RegexCraft", blurb: "Regex tester with plain-English explanations", href: "https://regex.norai.tech" },
   { name: "Judgewright", blurb: "Calibrate your LLM judge against human labels", href: "https://judge.norai.tech" },
-  { name: "Anchorflow", blurb: "Pin and audit GitHub Actions workflows", href: "https://anchor.norai.tech" },
+  { name: "Anchorflow", blurb: "Pin and audit GitHub Actions workflows", href: "https://anchorflow.norai.tech" },
   { name: "Smart Rozgar", blurb: "Sarkari job alerts in Hindi and English", href: "https://rozgar.norai.tech" },
 ] as const;
 
