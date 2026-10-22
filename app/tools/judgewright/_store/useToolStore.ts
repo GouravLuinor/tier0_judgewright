@@ -64,7 +64,12 @@ function guardedLocalStorage(): StateStorage {
 }
 
 /** Screen-reader announcement payload; `seq` keys re-renders of identical text. */
-export type StageId = "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export";
+
+/** A confusion-matrix cell the inspector is filtered to (human row × judge column). */
+export interface CellFilter {
+  human: string;
+  judge: string;
+}
 
 export interface StatusAnnouncement {
   message: string;
@@ -122,11 +127,13 @@ interface ToolState {
   isSamplesOpen: boolean;
   setSamplesOpen: (open: boolean) => void;
 
-  activeStage: "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export";
-  setActiveStage: (stage: "ingestion" | "verdict" | "matrix" | "disagreements" | "bias" | "export") => void;
+  /** The inspector row opened from the population strip or the table. */
+  focusedRow: string | null;
+  setFocusedRow: (rowKey: string | null) => void;
 
-  workbenchTab: "scorecard" | "calibration" | "inspector" | "audit";
-  setWorkbenchTab: (tab: "scorecard" | "calibration" | "inspector" | "audit") => void;
+  /** The matrix cell the inspector is narrowed to, if any. */
+  cellFilter: CellFilter | null;
+  setCellFilter: (filter: CellFilter | null) => void;
 
   /** Screen-reader announcements for async pipeline transitions. */
   statusAnnouncement: StatusAnnouncement | null;
@@ -154,7 +161,7 @@ function nextAnnouncement(message: string): StatusAnnouncement {
 
 function settleAnnouncement(result: ComputationResult): string {
   if (result.error) {
-    return `Analysis rejected: ${result.error}`;
+    return `No report: ${result.error}`;
   }
   if (!result.stats) {
     return "Analysis settled";
@@ -202,11 +209,11 @@ export const useToolStore = create<ToolState>()(
       isSamplesOpen: false,
       setSamplesOpen: (isSamplesOpen) => set({ isSamplesOpen }),
 
-      activeStage: "ingestion",
-      setActiveStage: (activeStage) => set({ activeStage }),
+      focusedRow: null,
+      setFocusedRow: (focusedRow) => set({ focusedRow }),
 
-      workbenchTab: "scorecard",
-      setWorkbenchTab: (workbenchTab) => set({ workbenchTab }),
+      cellFilter: null,
+      setCellFilter: (cellFilter) => set({ cellFilter }),
 
       statusAnnouncement: null,
       announceStatus: (message) =>
@@ -226,7 +233,7 @@ export const useToolStore = create<ToolState>()(
               degraded: result.degraded,
               errorMessage: failure,
               statusAnnouncement: nextAnnouncement(
-                `Analysis rejected: ${failure ?? "unknown error"}`
+                `No report: ${failure ?? "unknown error"}`
               ),
             };
           }
@@ -251,6 +258,8 @@ export const useToolStore = create<ToolState>()(
               },
             },
             disagreementWindow: window,
+            focusedRow: null,
+            cellFilter: null,
             parseIssues: result.stats.parse.issues,
             parseIssueCount: result.stats.parse.issueCount,
             degraded: result.degraded,

@@ -16,59 +16,55 @@
    `app/sitemap.ts` and `app/robots.ts`. Never hardcode the origin in a component.
 4. The root `app/page.tsx` is a server `redirect()` into `/tools/judgewright`.
 
-## 1. Design system (BAR §3)
+## 1. Design system ("Reference Target", `DESIGN.md`)
 
-5. **One accent only.** `brand-lime` is the single non-neutral hue on the entire page. It is
-   worn only by: settled measurement, the primary action, active/focus state, and plane
-   separation. It is absent from every headline, every icon and most body text.
-6. **Semantic state colors only.** `bg-brand-amber/10` = warning (degraded banner, capped
-   output). `bg-brand-rose/10` = error. Violet and amber are reserved for promotion/deprecation
-   callouts and citation links — never for interactive elements.
-7. **Colors come only from the Matchlight token ladder** in `app/globals.css`
-   (`surface-*`, `brand-*`, `code-*`) plus the inverted zinc neutrals
-   (`text-zinc-100/300/400/500`). **Never** a default Tailwind palette class and never a named
-   palette (`sky-500`, `emerald-600`…). Hex literals are banned outside `:root`/`.dark`.
-8. Mono type (`font-mono`) is reserved for machine data: verdicts, code, stats, dates,
-   keyboard chords, badges, and captions.
-9. Every typography/style decision obeys `docs/DESIGN.md`. Visual and content generation is
-   forbidden from deviating without updating `design_tokens.json` and `docs/DESIGN.md`.
-10. No chat-bubble template, no marketing-slogan generic grid, no fake dashboard with
-    hardcoded "98% success" style decoration, no stock-illustration filler.
-11. `boxShadow`: only `shadow-raycast` (inset hairline + lift) and `shadow-elevated`
-    (large surface lift). `rounded-*`: hard-capped `rounded-2xl` for the biggest surfaces;
-    everything else `rounded-lg`/`rounded-xl`/`rounded-md`. `blur` is only
-    `backdrop-blur-[6px]` behind the header.
-12. `ease-out-expo` is the ONE curve (`cubic-bezier(0.16, 1, 0.3, 1)`). `framer-motion`
-    and every other animation runtime are **absent** — CSS transitions only, never exceeding
-    300ms.
+5. **Every colour has one job.** `agree` = judge matched human, `miss` = disagreement,
+   `caution` = a limit or weak signal, `select` = primary action, focus and selection. The
+   `wedge-0…5` neutrals carry only the agreement bands; `label-0…7` only identify label
+   classes. None of them is decoration.
+6. The charcoal **bezel** (`bezel-*`) frames the header and the report meta strip in both
+   themes. Neutrals are `ground`, `panel`, `sunk`, `line`, `ink`/`ink-2`/`ink-3`.
+7. **Colours come only from the tokens** in `app/globals.css` (RGB triplets, `:root` light,
+   `.dark` dark) through their Tailwind names. **Never** a default Tailwind palette class;
+   hex literals are banned outside the token blocks and generated images.
+8. Archivo (width axis) for UI and prose; Fragment Mono only for machine data: verdict rows,
+   receipts, figures, keycaps, the meta strip. Figures are tabular (`.figures`).
+9. `DESIGN.md` (root) plus `.impeccable/design.json` is the design source of truth. A visual
+   change that deviates updates both in the same commit.
+10. Banned: eyebrows above headings, 01/02 section numbers, hero-metric tiles, grids of
+    same-size icon cards, gradient text, glass/blur, emoji used as icons, coloured
+    left borders thicker than 1px, chat-bubble templates, fake dashboards.
+11. Shadows: `shadow-lift` (report frame) and `shadow-pop` (overlays) only. Radius:
+    `rounded-[3px]` for controls, panels and overlays; `.patch` (2px) for swatches.
+12. `ease-out-expo` is the ONE curve; transitions are 150ms colour changes. The one authored
+    animation is `marker-settle` (420ms). No animation runtime.
 
-## 2. Layout & composition (BAR §2)
+## 2. Layout & composition
 
-13. One page per tool section that hosts everything: header → station (`h1` + trust pills) →
-    workstation card → comparison → guide → FAQ → footer.
-14. **No max-w on `<main>`.**
-    `<main>` = `w-full overflow-x-hidden` (full viewport). Every section inside it is
-    `mx-auto w-full max-w-7xl px-4 md:px-6 lg:px-8`. Sticky nav lives inside the header, not
-    clipped by the main container.
-15. Exactly one `<h1>`. `header`/`main`/`footer`/`contentinfo` landmarks are present. A skip
-    link targets the workstation card. Page regions are labeled with `aria-label`.
-16. The two-pane workstation grid is `lg:h-[620px] lg:grid-cols-2` with both panes `h-full
-    min-h-0`; below `lg` it stacks. Never a 3-pane bento, never `grid-cols-3`.
-17. Trust pills always visible: `100% in-browser` · `Chance-corrected κ` · `No account
-    required`.
-18. Preset menus are inline in the toolbar; the command palette (`⌘K`) and the sign-in modal
-    are globally mounted and complete the organization.
+13. One page: bezel header → `h1` + three promises → `#workstation` (verdicts | report) →
+    `#failures` → `#signals` → `#share` (the last three only once a report exists) →
+    `#matrix` (compare) → `#guide` (method) → `#faq` → family footer.
+14. **No max-w on `<main>`.** `<main>` = `w-full overflow-x-hidden`. Every section inside it is
+    `mx-auto w-full max-w-[1400px] px-4 sm:px-6 lg:px-8` (16px gutters on phones).
+15. Exactly one `<h1>`. `header`/`main`/`footer` landmarks are present. A skip link targets
+    `#workstation`. Page regions are labelled.
+16. The workstation is `lg:grid-cols-[minmax(0,36fr)_minmax(0,64fr)]` and stacks below `lg`.
+    Never a stepper of stage tabs, never a bento of equal panels.
+17. The three promises stay visible under the H1: "Computed in your browser" · "Nothing is
+    uploaded" · "No account needed". Each must stay literally true.
+18. Mobile (390px): no horizontal scroll; `#signals` and `#share` fold to their headings;
+    the comparison is one `<details>` per criterion. Keep the page near 6,300px or shorter.
 
 ## 3. Interaction & accessibility (BAR §2.5)
 
 19. **Every control implements all five interaction states**: default, hover (clearly
     distinct), active/focus-visible (ring or clear border change), disabled (reduced opacity),
     and loading. No control may ship with fewer.
-20. The required keyboard set: `⌘K` / `⌃K` palette, `⌘P` / `⌃P` samples menu, `⌘⇧C` / `⌃⇧C`
-    copy the current output, `⌘↵` / `⌃↵` focus the primary input.
-21. Copy is instant everywhere: no hover-reveal, no popup. Success is a brand-lime toast,
-    failure is a rose toast, and both live in `components/ui/toast.tsx` with the
-    `data-toast-variant` hook the e2e suite asserts.
+20. The required keyboard set: `⌘K` / `⌃K` palette, `⌘P` / `⌃P` samples menu (the input
+    panel's copy; the header copy keeps its own state), `⌘⇧C` / `⌃⇧C` copy the one-line
+    verdict, `⌘↵` / `⌃↵` focus the primary input. Never bind `⌘1–9` (browser tab switching).
+21. Copy is instant everywhere: no hover-reveal, no popup. Success and failure toasts live in
+    `components/ui/toast.tsx` with the `data-toast-variant` hook the e2e suite asserts.
 22. All five workflow states exist and are all reachable: success · empty · error · processing
     · no-pdf / no-worker. The no-pdf and no-worker paths are exactly the same as success, and
     the "processing" state is a true intent-bearing loading state.
@@ -83,15 +79,11 @@
     imports only `_lib`. `_components` and `_hooks` may import `_lib` and `_store`, never the
     reverse. `_workers` and `_lib` are never imported by `page.tsx` transitively at top level.
 
-    **BAR §8 exception (the one IO seam):** `_services/llmDiagnosis.ts` is the SOLE module that
-    performs network IO (a single, user-initiated, BYOK OpenRouter call). It lives outside
-    `_lib` precisely so the pure core stays pure; `_components`/`_hooks` may import `_services`,
-    and `_services` imports only `_lib`. It is off by default (`AUTO_DIAGNOSIS_ENABLED === false`),
-    fires EXACTLY ONE request only when the user supplies a key and presses Get diagnosis, is
-    abortable, and is ephemeral — nothing is persisted and the key never enters any store
-    snapshot or `localStorage` (it lives only in the panel's in-memory React state). The `_lib`
-    no-transcendentals rule (§33) still holds: `_services` is exempt only from pure-core
-    placement, never from correctness, and it never feeds a number back into the report.
+    **Dormant IO seam:** `_services/llmDiagnosis.ts` (BYOK OpenRouter call) and its tests stay
+    in the repo, but since the 2026-10 redesign **no UI imports it** (owner decision) and
+    `https://openrouter.ai` is not in `DECLARED_ORIGINS`. Re-surfacing it needs an owner
+    decision, the origin back in the CSP, the FAQ privacy answer updated, and the
+    "no diagnosis surface" e2e test changed in the same commit.
 26. Every cap, budget and key lives in `_lib/constants.ts` — one import site, verified with a
     grep for duplicate values.
 27. **Worker protocol.** Monotonic request ids; the stale-response guard drops a late reply
@@ -127,10 +119,8 @@
     `base-uri 'self'`, `object-src 'none'`, `form-action 'self'`, `script-src`/`style-src`
     `'unsafe-inline'` only (no `unsafe-eval` in production), `worker-src 'self' blob:`,
     `connect-src` built **only** from `DECLARED_ORIGINS`. `poweredByHeader: false`.
-36. **The optional LLM flow is off by default and never automatic.** With no key the flow is a
-    no-op. `AUTO_DIAGNOSIS_ENABLED` is `false`, the single origin it would use
-    (`https://openrouter.ai`) is already whitelisted, the dedup guard reduces duplicate calls,
-    the bundle cap is enforced and a reload closes the panel — and the zero-egress guard in
+36. **No LLM call ships.** `DECLARED_ORIGINS` is `'self'` plus Supabase only
+    (`csp.test.ts` asserts openrouter is absent), and the zero-egress guard in
     `e2e/visual.spec.ts` fails CI on any non-localhost request during first paint and a full
     compute.
 37. **Auth is env-gated.** Unset env keys ⇒ `isSupabaseConfigured` is false, the client is a
@@ -144,7 +134,7 @@
 
 ## 6. Gates & recipes (BAR §6, context.md §4.5)
 
-40. Work only on `main`; never push to another branch. Commit with repo-local identity, never
+40. Redesign work lands on the `redesign` branch; never push or deploy unless the owner asks. Commit with repo-local identity, never
     `--no-verify`. No new dependencies unless they already pay for themselves in the bundle.
 41. CI runs typecheck → lint → unit → build → Playwright. Playwright boots the **standalone**
     artifact on 3005 (never the dev server, except via the documented `PW_DEV=1` escape

@@ -34,7 +34,7 @@ import { toast } from "@/components/ui/toast";
 import { cn, copyTextToClipboard } from "@/lib/utils";
 import { TOOL_NAME } from "../_lib/constants";
 import { renderOneLineVerdict } from "../_lib/reportRender";
-import { SAMPLE_RUBRIC, SAMPLE_VERDICTS } from "../_lib/presets";
+import { SAMPLE_SETS } from "../_lib/presets";
 import { useToolStore } from "../_store/useToolStore";
 import { useAuthPromptStore } from "../_store/useAuthPromptStore";
 
@@ -113,74 +113,8 @@ export function CommandPalette() {
   const commands = useMemo<CommandItem[]>(() => {
     const navigation: CommandItem[] = [
       {
-        id: "stage-ingestion",
-        title: "Stage 1: Ingestion & Dataset Preview",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘1",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("ingestion");
-          close();
-        },
-      },
-      {
-        id: "stage-verdict",
-        title: "Stage 2: Headline Reliability Verdict",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘2",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("verdict");
-          close();
-        },
-      },
-      {
-        id: "stage-matrix",
-        title: "Stage 3: Confusion & Alignment Matrix",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘3",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("matrix");
-          close();
-        },
-      },
-      {
-        id: "stage-disagreements",
-        title: "Stage 4: Failure & Disagreement Inspector",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘4",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("disagreements");
-          close();
-        },
-      },
-      {
-        id: "stage-bias",
-        title: "Stage 5: Calibration & Bias Diagnostics",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘5",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("bias");
-          close();
-        },
-      },
-      {
-        id: "stage-export",
-        title: "Stage 6: Reproducibility Receipt & Export",
-        category: "Navigation",
-        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
-        keycap: "⌘6",
-        onSelect: () => {
-          useToolStore.getState().setActiveStage("export");
-          close();
-        },
-      },
-      {
-        id: "nav-workstation",
-        title: "Go to Workstation",
+        id: "go-verdict",
+        title: "Go to the verdict",
         category: "Navigation",
         icon: <Compass className="h-4 w-4" aria-hidden="true" />,
         onSelect: () => {
@@ -189,8 +123,38 @@ export function CommandPalette() {
         },
       },
       {
+        id: "go-failures",
+        title: "Go to where the judge disagrees",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        onSelect: () => {
+          scrollToSection("failures");
+          close();
+        },
+      },
+      {
+        id: "go-signals",
+        title: "Go to bias and calibration",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        onSelect: () => {
+          scrollToSection("signals");
+          close();
+        },
+      },
+      {
+        id: "go-share",
+        title: "Go to share and reproduce",
+        category: "Navigation",
+        icon: <Compass className="h-4 w-4" aria-hidden="true" />,
+        onSelect: () => {
+          scrollToSection("share");
+          close();
+        },
+      },
+      {
         id: "nav-matrix",
-        title: `Why ${TOOL_NAME}`,
+        title: "How it compares",
         category: "Navigation",
         icon: <Table2 className="h-4 w-4" aria-hidden="true" />,
         onSelect: () => {
@@ -200,7 +164,7 @@ export function CommandPalette() {
       },
       {
         id: "nav-guide",
-        title: "Guide",
+        title: "Method and input format",
         category: "Navigation",
         icon: <BookOpen className="h-4 w-4" aria-hidden="true" />,
         onSelect: () => {
@@ -220,25 +184,23 @@ export function CommandPalette() {
       },
     ];
 
-    const samples: CommandItem[] = [
-      {
-        id: "sample-demo",
-        title: "Load the demo verdict set",
-        category: "Samples",
-        hint: "Twelve hand-checkable rows with critiques",
-        icon: <Database className="h-4 w-4" aria-hidden="true" />,
-        onSelect: () => {
-          setVerdictsText(SAMPLE_VERDICTS);
-          setRubric(SAMPLE_RUBRIC);
-          close();
-        },
+    const samples: CommandItem[] = SAMPLE_SETS.map((set) => ({
+      id: `sample-${set.id}`,
+      title: `Load sample: ${set.name}`,
+      category: "Samples" as const,
+      hint: set.blurb,
+      icon: <Database className="h-4 w-4" aria-hidden="true" />,
+      onSelect: () => {
+        setVerdictsText(set.verdicts);
+        setRubric(set.rubric);
+        close();
       },
-    ];
+    }));
 
     const actions: CommandItem[] = [
       {
         id: "action-copy",
-        title: "Copy the analyzed paste",
+        title: "Copy the one-line verdict",
         category: "Actions",
         icon: <ClipboardCopy className="h-4 w-4" aria-hidden="true" />,
         keycap: "⌘⇧C",
@@ -249,7 +211,7 @@ export function CommandPalette() {
       },
       {
         id: "action-theme",
-        title: "Toggle Dark / Light Theme",
+        title: "Switch light / dark theme",
         category: "Actions",
         icon: <SunMoon className="h-4 w-4" aria-hidden="true" />,
         onSelect: () => {
@@ -259,7 +221,7 @@ export function CommandPalette() {
       },
       {
         id: "action-clear",
-        title: "Clear the workstation",
+        title: "Clear the verdicts",
         category: "Actions",
         icon: <Eraser className="h-4 w-4" aria-hidden="true" />,
         onSelect: () => {
@@ -363,12 +325,12 @@ export function CommandPalette() {
       onOpenChange={setCommandPaletteOpen}
     >
       <DialogContent
-        className="top-[10vh] flex max-w-lg translate-y-0 flex-col gap-0 overflow-hidden rounded-2xl border border-surface-border bg-surface-default p-0 shadow-elevated [&>button]:hidden"
+        className="top-[10vh] flex max-w-lg translate-y-0 flex-col gap-0 overflow-hidden rounded-[3px] border border-line bg-panel p-0 shadow-pop [&>button]:hidden"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
 
-        <div className="flex items-center gap-3 border-b border-surface-border bg-surface-subtle px-4 py-3">
-          <Microscope className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden="true" />
+        <div className="flex items-center gap-3 border-b border-line bg-sunk px-4 py-3">
+          <Microscope className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
           <input
             ref={inputRef}
             id="command-palette-search-input"
@@ -386,7 +348,7 @@ export function CommandPalette() {
             aria-expanded={true}
             aria-controls={listId}
             aria-activedescendant={activeOptionId}
-            className="w-full rounded-md bg-transparent font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70"
+            className="w-full rounded-[3px] bg-transparent font-mono text-sm text-ink placeholder:text-ink-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-select/70"
           />
           <Keycap size="xs">ESC</Keycap>
         </div>
@@ -398,14 +360,14 @@ export function CommandPalette() {
           className="max-h-80 overflow-y-auto p-2"
         >
           {filtered.length === 0 ? (
-            <div className="px-3 py-6 text-center font-mono text-xs text-zinc-500">
+            <div className="px-3 py-6 text-center font-mono text-xs text-ink-3">
               No matching commands.
             </div>
           ) : (
             grouped.map((group) =>
               group.items.length === 0 ? null : (
                 <div key={group.category} className="mb-1 last:mb-0">
-                  <div className="px-3 pb-1 pt-2 font-mono text-[10px] uppercase tracking-wide text-zinc-500">
+                  <div className="px-3 pb-1 pt-2 font-mono text-[10px] uppercase tracking-wide text-ink-3">
                     {group.category}
                   </div>
                   {group.items.map(({ item, index }) => {
@@ -423,18 +385,18 @@ export function CommandPalette() {
                         }}
                         onMouseEnter={() => setSelectedIndex(index)}
                         className={cn(
-                          "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 transition-[background-color,border-color,color,transform] duration-150 ease-out-expo motion-reduce:transition-none",
+                          "flex cursor-pointer items-center justify-between gap-3 rounded-[3px] border px-3 py-2 transition-[background-color,border-color,color] duration-150 ease-out-expo motion-reduce:transition-none",
                           isSelected
-                            ? "border-surface-borderHover bg-surface-elevated text-zinc-100"
-                            : "border-transparent text-zinc-300 hover:border-surface-border hover:bg-surface-elevated/50",
-                          "active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70"
+                            ? "border-line-strong bg-sunk text-ink"
+                            : "border-transparent text-ink-2 hover:border-line hover:bg-sunk/50",
+                          "active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select/70"
                         )}
                       >
                         <span className="flex min-w-0 items-center gap-2.5">
                           <span
                             className={cn(
                               "shrink-0",
-                              isSelected ? "text-brand-lime" : "text-zinc-400"
+                              isSelected ? "text-select-ink" : "text-ink-3"
                             )}
                           >
                             {item.icon}
@@ -444,7 +406,7 @@ export function CommandPalette() {
                               {item.title}
                             </span>
                             {item.hint ? (
-                              <span className="block truncate text-xs text-zinc-500">
+                              <span className="block truncate text-xs text-ink-3">
                                 {item.hint}
                               </span>
                             ) : null}
@@ -456,7 +418,7 @@ export function CommandPalette() {
                           ) : null}
                           {isSelected ? (
                             <CornerDownLeft
-                              className="h-3.5 w-3.5 text-brand-lime"
+                              className="h-3.5 w-3.5 text-select-ink"
                               aria-hidden="true"
                             />
                           ) : null}
@@ -470,7 +432,7 @@ export function CommandPalette() {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-surface-border bg-surface-subtle/50 px-4 py-2 font-mono text-[10px] text-zinc-500 select-none">
+        <div className="flex items-center justify-between gap-4 border-t border-line bg-sunk/50 px-4 py-2 font-mono text-[10px] text-ink-3 select-none">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <Keycap size="xs">↑</Keycap>
@@ -480,7 +442,7 @@ export function CommandPalette() {
               <Keycap size="xs">↵</Keycap> Select
             </span>
           </div>
-          <span className="font-medium text-zinc-400">{TOOL_NAME}</span>
+          <span className="font-medium text-ink-3">{TOOL_NAME}</span>
         </div>
       </DialogContent>
     </Dialog>

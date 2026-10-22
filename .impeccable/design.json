@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-22T07:04:59.949943+00:00",
+  "title": "Design System: Judgewright",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Grey card",
+        "canonical": "rgb(var(--ground))",
+        "dark": "rgb(18 18 17)"
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "rgb(var(--panel))",
+        "dark": "rgb(27 27 26)"
+      },
+      "bezel": {
+        "role": "neutral",
+        "displayName": "Charcoal bezel",
+        "canonical": "rgb(var(--bezel))",
+        "dark": "rgb(9 9 9)"
+      },
+      "agree": {
+        "role": "success",
+        "displayName": "Bluish green (agreement)",
+        "canonical": "rgb(var(--agree))"
+      },
+      "miss": {
+        "role": "error",
+        "displayName": "Moderate red (disagreement)",
+        "canonical": "rgb(var(--miss))"
+      },
+      "caution": {
+        "role": "warning",
+        "displayName": "Orange yellow (caution)",
+        "canonical": "rgb(var(--caution))"
+      },
+      "select": {
+        "role": "primary",
+        "displayName": "Purplish blue (selection)",
+        "canonical": "rgb(var(--select))",
+        "dark": "rgb(120 131 214)"
+      },
+      "wedge-0": {
+        "role": "scale",
+        "displayName": "Step wedge",
+        "tonalRamp": [
+          "rgb(52 52 52)",
+          "rgb(85 85 85)",
+          "rgb(110 110 109)",
+          "rgb(160 160 160)",
+          "rgb(200 200 200)",
+          "rgb(243 243 242)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "H1",
+        "purpose": "The single page heading; font-stretch 85%."
+      },
+      "heading": {
+        "displayName": "Section heading",
+        "purpose": "H2 per section; font-stretch 87.5%."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "Report figures, tabular numerals, 2 decimals on screen."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Verdict rows, receipts, keycaps, meta strip."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lift",
+        "value": "0 1px 0 rgb(var(--ink) / 0.04), 0 8px 24px -12px rgb(var(--ink) / 0.18)",
+        "purpose": "The report frame lifted a hair off the grey card."
+      },
+      {
+        "name": "pop",
+        "value": "0 18px 48px -16px rgb(0 0 0 / 0.45)",
+        "purpose": "Overlays only: menus, palette, dialogs."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The one curve; 150ms colour transitions."
+      },
+      {
+        "name": "marker-settle",
+        "value": "420ms ease-out-expo",
+        "purpose": "The κ marker slides to its value on the scale. Zeroed under reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per region.",
+      "html": "<button class=\"jw-btn\">Read the 3 disagreements</button>",
+      "css": ".jw-btn{font:500 14px/1 Archivo,system-ui,sans-serif;height:36px;padding:0 16px;border-radius:3px;border:1px solid rgb(var(--select));background:rgb(var(--select));color:#fff;transition:background-color 150ms cubic-bezier(0.16,1,0.3,1);cursor:pointer}.jw-btn:hover{background:rgb(var(--select) / 0.9)}.jw-btn:focus-visible{outline:2px solid rgb(var(--select));outline-offset:2px}"
+    },
+    {
+      "name": "Split Patch",
+      "kind": "custom",
+      "refersTo": "patch",
+      "description": "A target-matrix cell: human label top-left, judge bottom-right.",
+      "html": "<span class=\"jw-split\" aria-label=\"human pass, judge fail\"></span>",
+      "css": ".jw-split{display:inline-block;width:40px;height:40px;border-radius:2px;background:linear-gradient(135deg,rgb(98 122 157) 0 50%,rgb(214 126 44) 50% 100%)}"
+    },
+    {
+      "name": "Bezel Meta Strip",
+      "kind": "custom",
+      "refersTo": "bezel-header",
+      "description": "Report frame header: n, format, engine, timing.",
+      "html": "<div class=\"jw-meta\"><span>n = 12 rows</span><span>jsonl</span><span>engine worker</span></div>",
+      "css": ".jw-meta{display:flex;gap:16px;padding:8px 12px;background:rgb(30 30 29);color:rgb(178 178 172);font:12px/1.5 'Fragment Mono',ui-monospace,monospace;border-radius:3px 3px 0 0}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Reference Target",
+    "overview": "The judge is an instrument calibrated against a reference chart; the page reads the result off it. A charcoal bezel frames the header and report; ColorChecker patches carry state, each with one job; a six-step grey wedge carries the agreement bands.",
+    "keyCharacteristics": [
+      "Charcoal bezel in both themes",
+      "ColorChecker state patches with fixed jobs",
+      "Split-patch confusion matrix",
+      "One −1…1 agreement scale",
+      "Archivo with width axis + Fragment Mono"
+    ],
+    "rules": [
+      {
+        "name": "One job per patch",
+        "body": "agree, miss, caution and select never appear as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "Sentence before number",
+        "body": "The verdict reads as a plain sentence before any figure.",
+        "section": "typography"
+      },
+      {
+        "name": "One depth",
+        "body": "lift for the report frame, pop for overlays; no glass or blur.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Show 2 decimals; keep exact values in data-value and exports",
+      "Theme selection, caret, scrollbars and focus",
+      "Fold secondary sections on phones"
+    ],
+    "donts": [
+      "Eyebrows, section numbers, hero-metric tiles, icon-card grids",
+      "Gradient text, glass, emoji icons, thick coloured left borders",
+      "Claims the code does not back"
+    ]
+  }
+}

@@ -73,10 +73,10 @@ test.describe("Judgewright shell journeys", () => {
   test("header, single h1, nav, theme toggle and sign-in are present", async ({
     page,
   }) => {
-    // Exactly one <h1>, named Judgewright.
+    // Exactly one <h1>, and it says what the page does (search intent).
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      /Judgewright/i
+      /Calibrate your LLM judge against human labels/i
     );
 
     const header = page.getByRole("banner");
@@ -84,16 +84,15 @@ test.describe("Judgewright shell journeys", () => {
 
     // In-page anchors to the station / guide / faq sections.
     const nav = header.getByRole("navigation");
-    await expect(nav.getByRole("link", { name: /workstation/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /guide/i })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /faq/i })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /calibrate/i })).toHaveAttribute("href", "#workstation");
+    await expect(nav.getByRole("link", { name: /method/i })).toHaveAttribute("href", "#guide");
+    await expect(nav.getByRole("link", { name: /faq/i })).toHaveAttribute("href", "#faq");
 
-    // Trust pills are visible on first load (BAR §2.3). They live in the
-    // station header, the card's sibling above #workstation.
+    // The three privacy promises are visible on first load, beside the H1.
     for (const pill of [
-      /100% in-browser/i,
-      /Chance-corrected κ/i,
-      /No account required/i,
+      /Computed in your browser/i,
+      /Nothing is uploaded/i,
+      /No account needed/i,
     ]) {
       await expect(page.getByText(pill).first()).toBeVisible();
     }
@@ -123,9 +122,6 @@ test.describe("Judgewright shell journeys", () => {
     // The engine badge proves the result came back through the Web Worker.
     await expect(station(page).getByText("worker", { exact: true })).toBeVisible();
 
-    // Navigate to the Verdict stage to inspect the report card
-    await page.getByRole("button", { name: /verdict/i }).first().click();
-
     // The seeded fixture is 12 binary rows, 9 agreements / 3 disagreements.
     // Human marginals 9/3, judge marginals 8/4 ⇒ A=9, S=84, κ = (9·12−84)/(12²−84)
     // = 0.4, raw agreement 75.0%, always-majority baseline 75.0% — the Δκ
@@ -146,14 +142,20 @@ test.describe("Judgewright shell journeys", () => {
     await expect(
       page.locator('[data-stat="agreement"] dd').first()
     ).toHaveText("75.0%");
-    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText(
+    // The screen reads two decimals; the exact 17-digit value rides along
+    // in data-value, the same string the exports print.
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText("0.40");
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveAttribute(
+      "data-value",
       "0.40000000000000002"
     );
     await expect(page.locator('[data-stat="baseline"] dd').first()).toHaveText(
       "75.0%"
     );
-    await expect(page.locator("[data-deflation]")).toContainText(
-      "Δκ = 0.34999999999999998"
+    await expect(page.locator("[data-deflation]")).toContainText("Δκ = 0.35");
+    await expect(page.locator("[data-deflation]")).toHaveAttribute(
+      "data-value",
+      "0.34999999999999998"
     );
     await expect(page.locator("[data-deflation]")).toContainText("35.0 pp");
   });
@@ -197,14 +199,13 @@ test.describe("Judgewright shell journeys", () => {
       timeout: COMPUTE_TIMEOUT,
     });
 
-    // Navigate to Verdict stage to inspect numbers
-    await page.getByRole("button", { name: /verdict/i }).first().click();
-
     // The report card shows the expected agreement / κ / chance baseline.
     await expect(
       page.locator('[data-stat="agreement"] dd').first()
     ).toHaveText("95.0%");
-    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText(
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveText("0.52");
+    await expect(page.locator('[data-stat="kappa"] dd').first()).toHaveAttribute(
+      "data-value",
       "0.51923076923076927"
     );
     await expect(page.locator('[data-stat="baseline"] dd').first()).toHaveText(
@@ -243,21 +244,6 @@ test.describe("Judgewright shell journeys", () => {
     expect(clipboard).toContain("κ 0.51923076923076927");
     expect(clipboard).toContain("always-majority 94.0%");
   });
-  test("rubric pane persists beside the verdicts", async ({ page }) => {
-    const rubric = page.locator("#tool-rubric-input");
-    await fillStable(rubric, "Accuracy, completeness, safety");
-
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            () => localStorage.getItem("judgewright-tool-storage") ?? ""
-          ),
-        { timeout: COMPUTE_TIMEOUT }
-      )
-      .toContain("Accuracy, completeness, safety");
-  });
-
   test("persistence: a distinctive verdict survives a reload", async ({
     page,
   }) => {
@@ -410,13 +396,11 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     const pane = page.locator('[data-report-state="ready"]');
     await expect(pane).toBeVisible({ timeout: COMPUTE_TIMEOUT });
 
-    // Navigate to Verdict stage to inspect headline and grade
-    await page.getByRole("button", { name: /verdict/i }).first().click();
-
     // Headline numbers, against the pinned references.
     await expect(pane.locator('[data-stat="agreement"]')).toContainText("95.0%");
-    await expect(pane.locator('[data-stat="kappa"]')).toContainText(
-      "0.5192307692307692"
+    await expect(pane.locator('[data-stat="kappa"] dd').first()).toHaveAttribute(
+      "data-value",
+      /^0\.5192307692307692/
     );
 
     // The κ CI bracket rides beside the coefficient (AC-13 / AC-52).
@@ -431,15 +415,14 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
       "Landis–Koch convention applied to unweighted κ"
     );
 
-    // Navigate to Confusion Matrix stage to inspect Alpha panel
-    await page.getByRole("button", { name: /matrix/i }).first().click();
-
     // The α panel: the panel figure, the human-ceiling honesty and the
     // mandatory κ-vs-α disclosure (AC-34 / AC-50).
-    const alphaPanel = pane.locator("[data-alpha-panel]");
+    const alphaPanel = page.locator("[data-alpha-panel]");
     await expect(alphaPanel).toBeVisible();
-    await expect(alphaPanel.locator("[data-alpha-panel-value]")).toContainText(
-      "0.519240019240019"
+    await expect(alphaPanel.locator("[data-alpha-panel-value]")).toHaveText("0.52");
+    await expect(alphaPanel.locator("[data-alpha-panel-value]")).toHaveAttribute(
+      "data-value",
+      /^0\.519240019240019/
     );
     await expect(alphaPanel.locator("[data-alpha-humans-value]")).toHaveText("—");
     await expect(alphaPanel).toContainText(
@@ -456,12 +439,9 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
       alphaPanel.locator("[data-alpha-ci-restriction]")
     ).toContainText("resamples a single judge-vs-first-human pair");
 
-    // Navigate to Disagreements stage to inspect table
-    await page.getByRole("button", { name: /disagreements/i }).first().click();
-
     // The disagreement table: windowed, honest about the window, and it does
     // contain the 50 rows where human and judge disagree.
-    const table = pane.locator("[data-disagreement-table]");
+    const table = page.locator("[data-disagreement-table]");
     await expect(table).toBeVisible();
     await expect(table.locator("tbody tr")).toHaveCount(1000);
     await expect(table.locator('tbody tr[data-agree="false"]')).toHaveCount(50);
@@ -482,8 +462,8 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     // The copy must carry THIS fixture's report, not the seeded 12-row demo:
     // wait for the headline figure to settle before pressing the chord.
     await expect(
-      page.locator('[data-stat="kappa"]')
-    ).toContainText("0.5192307692307692", { timeout: COMPUTE_TIMEOUT });
+      page.locator('[data-stat="kappa"] dd').first()
+    ).toHaveAttribute("data-value", /^0\.5192307692307692/, { timeout: COMPUTE_TIMEOUT });
 
     await page.keyboard.press(`${MOD}+Shift+KeyC`);
     await expect(page.locator('[data-toast-variant="success"]')).toBeVisible({
@@ -500,127 +480,23 @@ test.describe("the D2 report card — κ CI, grade, α panel, disagreements", ()
     expect(copied).toMatch(/κ 0\.5192307692307692\d* \[0\.\d+, 0\.\d+\]/);
   });
 
-  // ── The optional opt-in BYOK LLM diagnosis (AC-17/18/38) ───────────────────
-  // It is OFF by default and never automatic: the default compute fires zero
-  // openrouter requests; only a configured key + a click sends exactly one.
-  const diagnosisPanel = (page: import("@playwright/test").Page) =>
-    page.locator('[data-testid="diagnosis-panel"]');
-
-  test("the diagnosis is never automatic — the default compute sends no openrouter requests", async ({
+  // ── No LLM call surface ─────────────────────────────────────────────────
+  // The BYOK diagnosis left the UI (2026-10-22). A full report must settle
+  // with no diagnosis control on the page and no openrouter request.
+  test("a full report settles with no diagnosis surface and no openrouter request", async ({
     page,
   }) => {
     let hits = 0;
     await page.route("**/openrouter.ai/**", async (route) => {
       hits += 1;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: "{}",
-      });
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
     });
 
     await fillStable(verdictsInput(page), HEADLINE);
     await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
       timeout: COMPUTE_TIMEOUT,
     });
-
-    // Navigate to Export stage to access Diagnosis panel
-    await page.getByRole("button", { name: /export/i }).first().click();
-
-    // The panel is present and off — a real report settles with no BYOK call.
-    await expect(diagnosisPanel(page)).toContainText("1 call, not logged");
+    await expect(page.locator('[data-testid^="diagnosis-"]')).toHaveCount(0);
     expect(hits).toBe(0);
-  });
-
-  test("no key ⇒ the button is a configure no-op that sends nothing (AC-17)", async ({
-    page,
-  }) => {
-    let hits = 0;
-    let authorization = "";
-    await page.route("**/openrouter.ai/**", async (route) => {
-      hits += 1;
-      authorization = route.request().headers()["authorization"] ?? "";
-      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
-    });
-
-    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
-      timeout: COMPUTE_TIMEOUT,
-    });
-
-    // Navigate to Export stage to access Diagnosis panel
-    await page.getByRole("button", { name: /export/i }).first().click();
-
-    const getButton = page.locator('[data-testid="diagnosis-get"]');
-    await expect(getButton).toHaveText("Configure a key");
-    await getButton.click();
-    // No key ⇒ no request, and the panel stays in the configure-key state.
-    expect(hits).toBe(0);
-    await expect(getButton).toHaveText("Configure a key");
-    expect(authorization).toBe("");
-  });
-
-  test("a key + click sends exactly ONE mocked call and renders the diagnosis (AC-18)", async ({
-    page,
-  }) => {
-    const calls: { authorization: string; body: string }[] = [];
-    await page.route("**/openrouter.ai/**", async (route) => {
-      const request = route.request();
-      calls.push({
-        authorization: request.headers()["authorization"] ?? "",
-        body: request.postData() ?? "",
-      });
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  rubric_holes: ["No tie-breaker for near-identical answers."],
-                  bias_flags: ["Favours longer answers."],
-                  misapplications: ["ex-0028"],
-                  priority_fix: "Add an explicit length penalty to the rubric.",
-                }),
-              },
-            },
-          ],
-        }),
-      });
-    });
-
-    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
-      timeout: COMPUTE_TIMEOUT,
-    });
-
-    // Navigate to Export stage to access Diagnosis panel
-    await page.getByRole("button", { name: /export/i }).first().click();
-
-    await page
-      .locator('[data-testid="diagnosis-key-input"]')
-      .fill("sk-or-e2e-only");
-    const getButton = page.locator('[data-testid="diagnosis-get"]');
-    await expect(getButton).toHaveText("Get diagnosis");
-    await getButton.click();
-
-    const result = page.locator('[data-testid="diagnosis-result"]');
-    await expect(result).toBeVisible({ timeout: COMPUTE_TIMEOUT });
-    await expect(result).toContainText("No tie-breaker for near-identical answers.");
-    await expect(result).toContainText("Favours longer answers.");
-    await expect(result).toContainText("Add an explicit length penalty to the rubric.");
-
-    // Exactly one call, Bearer-authenticated, with the disclosed payload only.
-    expect(calls).toHaveLength(1);
-    expect(calls[0].authorization).toBe("Bearer sk-or-e2e-only");
-    expect(calls[0].body).toContain("disagreements");
-
-    // Nothing is persisted: a reload drops the key and the panel is unconfigured.
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator('[data-report-state="ready"]')).toBeVisible({
-      timeout: COMPUTE_TIMEOUT,
-    });
-    await expect(page.locator('[data-testid="diagnosis-get"]')).toHaveText(
-      "Configure a key"
-    );
   });
 });

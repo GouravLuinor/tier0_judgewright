@@ -24,8 +24,8 @@ export function Keycap({
   return (
     <kbd
       className={cn(
-        "inline-flex items-center justify-center font-mono font-medium select-none rounded-md border border-surface-border text-zinc-300",
-        "bg-surface-subtle shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)]",
+        "inline-flex items-center justify-center font-mono font-medium select-none rounded-[3px] border border-line text-ink-2",
+        "bg-sunk shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)]",
         "transition-transform active:translate-y-[0.5px]",
         sizeClasses[size],
         className

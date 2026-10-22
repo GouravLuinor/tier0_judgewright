@@ -8,6 +8,7 @@ import {
 } from "../_lib/constants";
 import type {
   VerdictAnalysis,
+  WorkerReadyMessage,
   WorkerInputPayload,
   WorkerOutputPayload,
 } from "../_lib/types";
@@ -224,3 +225,7 @@ self.onmessage = (event: MessageEvent<WorkerInputPayload>) => {
     } satisfies WorkerOutputPayload);
   }
 };
+
+// Readiness handshake: the hook holds its first dispatch (and its watchdog)
+// until this lands, so load time never counts against the compute budget.
+self.postMessage({ type: "ready" } satisfies WorkerReadyMessage);

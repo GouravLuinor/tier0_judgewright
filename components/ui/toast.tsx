@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export interface ToastOptions {
   title: string;
   description?: string;
-  /** `default` is the success state (brand-lime) — BAR §2.5 copy feedback. */
+  /** `default` is the success state (select) — BAR §2.5 copy feedback. */
   variant?: "default" | "destructive";
   duration?: number;
 }
@@ -70,16 +70,10 @@ function useToasts(): ToastItem[] {
   return items;
 }
 
-const variantStyles = {
-  default:
-    "border-brand-lime/40 bg-brand-lime/10 text-brand-lime hover:border-brand-lime/60",
-  destructive:
-    "border-brand-rose/40 bg-brand-rose/10 text-brand-rose hover:border-brand-rose/60",
-} as const;
-
-const descriptionTone = {
-  default: "text-brand-lime/70",
-  destructive: "text-brand-rose/70",
+// Toasts are bezel slips; the patch square names the outcome, the title says it.
+const patchTone = {
+  default: "bg-agree",
+  destructive: "bg-miss",
 } as const;
 
 function Toaster() {
@@ -106,23 +100,23 @@ function Toaster() {
             item.variant === "destructive" ? "error" : "success"
           }
           className={cn(
-            "pointer-events-auto flex w-full items-start gap-3 rounded-xl border p-3 shadow-elevated transition-colors duration-150 ease-out-expo motion-reduce:transition-none",
-            variantStyles[item.variant ?? "default"],
+            "pointer-events-auto flex w-full items-start gap-3 rounded-[3px] border border-bezel-line bg-bezel p-3 text-bezel-ink shadow-pop motion-reduce:transition-none",
             item.exiting
               ? "animate-out fade-out-0 slide-out-to-right-4 zoom-out-95"
               : "animate-in fade-in-0 slide-in-from-right-4 zoom-in-95"
           )}
         >
+          <span
+            aria-hidden="true"
+            className={cn("mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[2px]", patchTone[item.variant ?? "default"])}
+          />
           <div className="flex min-w-0 flex-col gap-1">
             <p className="text-sm font-medium leading-none tracking-tight">
               {item.title}
             </p>
             {item.description ? (
               <p
-                className={cn(
-                  "font-mono text-xs leading-relaxed",
-                  descriptionTone[item.variant ?? "default"]
-                )}
+                className="text-xs leading-relaxed text-bezel-muted"
               >
                 {item.description}
               </p>
@@ -132,7 +126,7 @@ function Toaster() {
             type="button"
             onClick={() => dismissToast(item.id)}
             aria-label="Dismiss notification"
-            className="ml-auto shrink-0 rounded-md p-1 text-zinc-500 opacity-70 transition-[opacity,background-color,transform] duration-150 ease-out-expo hover:bg-surface-elevated/60 hover:text-zinc-100 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime/70 focus-visible:opacity-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
+            className="ml-auto shrink-0 rounded-[3px] p-1 text-bezel-muted opacity-80 transition-[opacity,background-color,transform] duration-150 ease-out-expo hover:bg-bezel-raised hover:text-bezel-ink hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select/70 focus-visible:opacity-100 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none"
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

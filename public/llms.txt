@@ -1,0 +1,35 @@
+# Judgewright
+
+> Free, in-browser tool that checks whether an LLM-as-judge agrees with human labels once chance is removed. Paste JSONL or CSV rows with an example id, the judge's label and the human label; it returns a plain verdict, Cohen's kappa with a seeded bootstrap interval, Krippendorff's alpha, a confusion matrix and every disagreement. Nothing is uploaded and no account is needed. Built by Nor AI.
+
+## Use it
+
+- [Judgewright](https://judge.norai.tech/tools/judgewright): the tool. Paste verdict rows or load a sample set.
+
+## What it computes
+
+- Raw agreement, the always-majority chance baseline, and unweighted Cohen's kappa on one shared scale, with the gap between raw agreement and kappa stated in percentage points.
+- A seeded, reproducible bootstrap confidence interval for kappa, accuracy and alpha. The replicate count is tiered by row count and printed.
+- Krippendorff's alpha with the judge as a panel member, and a humans-only alpha (the ceiling) when rows carry two or more human labels.
+- Linear and quadratic weighted kappa as secondary readings for ordered labels.
+- ECE and Brier score when a judge_score column is present; position and length bias when pairwise columns are present.
+- A receipt with the formula and exact inputs, so a reviewer can recompute kappa by hand.
+
+## Input format
+
+- JSONL: one object per line with example_id, judge_label, human_label. Optional: human_labels (array), judge_score, judge_critique, human_critique, position, preferred_longer.
+- CSV with the same columns; common aliases (label, prediction, gold_label, confidence) are mapped automatically.
+
+## Limits
+
+- It does not run a judge or call any model. You bring the verdicts.
+- It keeps no history across runs.
+- Grade bands are the Landis–Koch convention, a convenience mapping rather than a standard.
+
+## More free tools from Nor AI
+
+- [TokenCraft](https://tokens.norai.tech): token counter and LLM cost calculator
+- [SchemaCraft](https://schema.norai.tech): JSON to Zod, Pydantic and TypeScript types
+- [RegexCraft](https://regex.norai.tech): regex tester with plain-English explanations
+- [Anchorflow](https://anchor.norai.tech): pin and audit GitHub Actions workflows
+- [Smart Rozgar](https://rozgar.norai.tech): Sarkari job alerts in Hindi and English

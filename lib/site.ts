@@ -1,52 +1,70 @@
-/** One source of truth for Judgewright's identity and FAQ content. */
+/** One source of truth for Judgewright's identity, family links and FAQ content. */
 
 export const SITE = {
   name: "Judgewright",
   shortName: "Judgewright",
-  title: "Judgewright — Calibration Instrument for the LLM Judge You Already Ship",
+  title: "LLM Judge Calibration: Cohen's Kappa vs Human Labels",
   description:
-    "Paste a rubric and a set of verdicts; Judgewright returns a report card with error bars — confusion matrix, chance-corrected agreement, Krippendorff's α, seeded reproducible bootstrap CIs and a letter grade. 100% in-browser, no account required.",
+    "Check whether your LLM-as-judge agrees with human labels once chance is removed. Paste JSONL or CSV verdicts and get Cohen's κ, Krippendorff's α, bootstrap confidence intervals, a confusion matrix and every disagreement. Free, no sign-up, computed in your browser.",
   url: "https://judge.norai.tech",
   locale: "en_US",
   creator: "Nor AI",
   keywords: [
-    "Judgewright",
     "LLM judge calibration",
-    "Cohen's kappa",
-    "Krippendorff alpha",
+    "LLM as a judge",
+    "Cohen's kappa calculator",
+    "Krippendorff's alpha calculator",
     "inter-rater reliability",
     "LLM evaluation",
+    "judge human agreement",
     "confusion matrix",
-    "chance-corrected agreement",
     "bootstrap confidence interval",
-    "offline judge evaluation",
-    "zero cloud egress developer tool",
+    "Judgewright",
     "Nor AI",
   ],
   faqs: [
     {
-      q: "What does Judgewright actually measure?",
-      a: "It measures a judge you already have labels for. You paste verdicts alongside human labels, and Judgewright reports how much of the agreement between them survives a chance correction, with error bars and a reproducibility receipt. It never runs a judge itself, never ranks an answer, and never scores a response.",
+      q: "What does Judgewright measure?",
+      a: "How far you can trust an LLM judge you already run. You paste the judge's labels next to human labels for the same examples, and Judgewright reports how much of their agreement survives a chance correction (Cohen's κ and Krippendorff's α), with confidence intervals, a confusion matrix and the exact examples where they disagree. It never runs a judge and never scores a response itself.",
+    },
+    {
+      q: "Why isn't percent agreement enough?",
+      a: "Because a judge can agree with humans just by repeating the most common label. If most of your examples pass, a judge that always says pass looks excellent on raw agreement while telling you nothing. Cohen's κ subtracts the agreement expected from the label mix alone, so Judgewright shows raw agreement, the chance baseline and κ on one scale, and says how much raw agreement flatters the judge.",
     },
     {
       q: "Do my verdicts leave my browser?",
-      a: "No. Parsing, every statistic and each export are computed inside an in-browser Web Worker. There is no upload, no telemetry on your payload, and no account requirement. The default path makes zero network requests — the Playwright request guard in this repository fails CI if that ever changes.",
+      a: "No. Parsing, every statistic and every export run in a Web Worker inside your tab. There is no upload and no account, and the page's Content Security Policy only allows connections to its own origin plus the optional sign-in provider. The repository's browser tests fail if a full analysis ever makes an outside request.",
     },
     {
-      q: "Why is agreement not the headline?",
-      a: "Raw agreement counts ties that a coin flip would also have produced once you account for the label distribution, so a judge can look excellent against a skewed label set while carrying almost no information. Judgewright prints raw agreement, the chance-corrected coefficient, and the deflation between them side by side, so the gap cannot be missed.",
+      q: "How many labelled examples do I need?",
+      a: "Enough for the confidence interval to be narrow enough to decide on. Judgewright prints a seeded bootstrap interval for κ; if the interval reaches zero, the data cannot rule out a judge that is no better than chance, and the verdict says so. Practitioner guides commonly suggest a frozen set of a few hundred stratified examples, but read the interval rather than a rule of thumb.",
     },
     {
-      q: "Can I reproduce the numbers myself?",
-      a: "Yes. Statistics are deterministic: the same rows, the same seed and the same replicate count produce byte-identical results. The receipt prints the exact seed, the replicate count that was actually used, the budget it ran under, and which engine produced the number.",
+      q: "What is the difference between Cohen's kappa and Krippendorff's alpha?",
+      a: "Cohen's κ compares exactly two raters: your judge and the human label. Krippendorff's α treats the judge as one member of a panel, handles several human raters and missing ratings, and supports ordinal and interval data. With one human rater and nominal labels the two agree closely. When you supply several human raters, Judgewright also reports the humans-only α, the ceiling a judge cannot meaningfully exceed.",
     },
     {
-      q: "What happens on a very large verdict set?",
-      a: "The whole pipeline runs off the main thread behind an adaptive debounce, a cooperative deadline and a hard watchdog, so the interface stays responsive. Rows above the cap are capped before analysis while the true total is still counted and shown, and any budget that trips is disclosed rather than silently absorbed.",
+      q: "Can someone else reproduce my numbers?",
+      a: "Yes. The same rows, seed and replicate count produce byte-identical results. Every report carries a receipt with the formula, the inputs, the seed, the replicate count actually used and which engine computed it, so a reviewer can recompute κ from the receipt alone.",
     },
     {
-      q: "Does it work without an account?",
-      a: "Completely. Sign-in, when a project is configured, only unlocks conveniences such as cross-device sync. Every deterministic feature — parsing, statistics, tables, exports, copying — works with no account and no backend at all.",
+      q: "Is it free? Do I need an account?",
+      a: "It is free and every analysis and export works without an account. Signing in is optional and only offered when you download a report.",
     },
   ],
 } as const;
+
+/**
+ * The Nor AI family thread: the same list, in the same order, on every tool.
+ * Each tool renders it in its own world and leaves itself out.
+ */
+export const FAMILY_TOOLS = [
+  { name: "TokenCraft", blurb: "Token counter and LLM cost calculator", href: "https://tokens.norai.tech" },
+  { name: "SchemaCraft", blurb: "JSON to Zod, Pydantic and TypeScript types", href: "https://schema.norai.tech" },
+  { name: "RegexCraft", blurb: "Regex tester with plain-English explanations", href: "https://regex.norai.tech" },
+  { name: "Judgewright", blurb: "Calibrate your LLM judge against human labels", href: "https://judge.norai.tech" },
+  { name: "Anchorflow", blurb: "Pin and audit GitHub Actions workflows", href: "https://anchor.norai.tech" },
+  { name: "Smart Rozgar", blurb: "Sarkari job alerts in Hindi and English", href: "https://rozgar.norai.tech" },
+] as const;
+
+export const NORAI_URL = "https://norai.tech";

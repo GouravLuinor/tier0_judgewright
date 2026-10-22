@@ -167,10 +167,8 @@ test.describe("Judgewright perf + honesty", () => {
     );
 
     // The copied markdown card carries the same true totals.
-    // The report card's own button (exact: the header's is "Copy report ⌘⇧C").
-    await station(page)
-      .getByRole("button", { name: "Copy report", exact: true })
-      .click();
+    // The markdown card from the share section.
+    await page.getByRole("button", { name: "Copy card", exact: true }).click();
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain(
       `Disagreements: ${TRUE_DISAGREEMENTS.toLocaleString("en-US")} of ${ROWS.toLocaleString("en-US")} rows disagree`

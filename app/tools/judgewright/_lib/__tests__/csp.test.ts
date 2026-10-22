@@ -182,7 +182,8 @@ describe("connect-src vs DECLARED_ORIGINS (the zero-egress contract)", () => {
     expect(origins).toContain("'self'");
     expect(origins).toContain("https://*.supabase.co");
     expect(origins).toContain("wss://*.supabase.co");
-    expect(origins).toContain("https://openrouter.ai");
+    // The diagnosis panel is gone from the UI, so its origin is not allowed.
+    expect(origins).not.toContain("https://openrouter.ai");
     // Nothing else — no CDN, no analytics, no fonts origin.
     expect(origins).toEqual([...DECLARED_ORIGINS]);
   });

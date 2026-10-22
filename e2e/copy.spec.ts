@@ -3,8 +3,8 @@ import { test, expect, type Locator, type Page } from "@playwright/test";
 /**
  * AC-54 — the copy path, end to end.
  *
- * The bar requires: per-pane copy buttons AND the ⌘⇧C chord, a brand-LIME
- * success toast and a brand-ROSE failure toast, and clipboard read-back so the
+ * The bar requires: a copy button AND the ⌘⇧C chord, a success toast and a
+ * failure toast, and clipboard read-back so the
  * assertion is about what the user actually GETS rather than what a handler
  * was called with. `demos.spec.ts` and `smoke.spec.ts` carry individual
  * journeys through these paths; this file is the named home for the full
@@ -24,7 +24,6 @@ const MOD = "ControlOrMeta";
 
 const verdictsInput = (page: Page) => page.locator("#tool-verdicts-input");
 const reportState = (page: Page) => page.locator("[data-report-state]");
-const station = (page: Page) => page.locator("#workstation");
 
 /**
  * A four-row fixture with its figures pinned: human {pass×3, fail×1}, judge
@@ -78,20 +77,19 @@ test.describe("AC-54 — the copy path", () => {
     await gotoReady(page);
     await fillStable(verdictsInput(page), FIXTURE);
     // Wait for THIS fixture's report before exercising the copy controls.
-    await expect(page.locator('[data-stat="kappa"]')).toContainText(
+    await expect(page.locator('[data-stat="kappa"] dd[data-value]')).toHaveAttribute(
+      "data-value",
       "0.50000000000000000",
       { timeout: COMPUTE_TIMEOUT }
     );
   });
 
-  test("⌘⇧C copies the one-line verdict and toasts LIME", async ({ page }) => {
+  test("⌘⇧C copies the one-line verdict and toasts success", async ({ page }) => {
     await page.keyboard.press(`${MOD}+Shift+KeyC`);
 
     const toast = toastOf(page, "success");
     await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
     await expect(toast).toContainText(/copied/i);
-    // Brand-lime is the single accent, spent on success (BAR §3.2).
-    await expect(toast).toHaveClass(/text-brand-lime/);
 
     const clipboard = await readClipboard(page);
     expect(clipboard).toContain("4 rows");
@@ -100,41 +98,25 @@ test.describe("AC-54 — the copy path", () => {
     expect(clipboard).toContain("always-majority 75.0%");
   });
 
-  test("the toolbar Copy report button mirrors the chord and toasts LIME", async ({
+  test("the report's Copy verdict button mirrors the chord and toasts success", async ({
     page,
   }) => {
     await page.keyboard.press("Escape");
-    // The toolbar control's accessible name carries its ⌘⇧C keycap, which is
-    // exactly what distinguishes it from the pane's own "Copy report".
-    await station(page)
-      .getByRole("button", { name: "Copy report ⌘⇧C" })
+    // The control's accessible name carries its ⌘⇧C keycap.
+    await page
+      .locator("#report-pane")
+      .getByRole("button", { name: "Copy verdict ⌘⇧C" })
       .click();
 
     const toast = toastOf(page, "success");
     await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
-    await expect(toast).toHaveClass(/text-brand-lime/);
 
     const clipboard = await readClipboard(page);
     expect(clipboard).toContain("4 rows");
     expect(clipboard).toContain("κ 0.50000000000000000");
   });
 
-  test("the report pane's own Copy report button toasts LIME", async ({ page }) => {
-    // The pane header button carries the keycap hint beside its label.
-    await page
-      .locator("#report-pane")
-      .getByRole("button", { name: /copy report/i })
-      .click();
-
-    const toast = toastOf(page, "success");
-    await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
-    await expect(toast).toHaveClass(/text-brand-lime/);
-
-    const clipboard = await readClipboard(page);
-    expect(clipboard).toContain("4 rows");
-  });
-
-  test("each export-bar artifact copies its own content and toasts LIME", async ({
+  test("each export-bar artifact copies its own content and toasts success", async ({
     page,
   }) => {
     const exportBar = page.locator("[data-export-scope]").locator("..");
@@ -172,7 +154,7 @@ test.describe("AC-54 — the copy path", () => {
     expect(jsonl).toContain("c-004");
   });
 
-  test("a failed copy surfaces the ROSE toast with its failure copy", async ({
+  test("a failed copy surfaces the error toast with its failure copy", async ({
     page,
   }) => {
     // Force BOTH the async Clipboard API and the hidden-textarea execCommand
@@ -193,8 +175,6 @@ test.describe("AC-54 — the copy path", () => {
     const toast = toastOf(page, "error");
     await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
     await expect(toast).toContainText(/copy failed/i);
-    // Rose is the ONE error colour (BAR §3.2), and it is not a neutral card.
-    await expect(toast).toHaveClass(/text-brand-rose/);
   });
 
   test("a failed export-bar copy says what to do instead (Download)", async ({
@@ -218,23 +198,18 @@ test.describe("AC-54 — the copy path", () => {
     await expect(toast).toBeVisible({ timeout: BOUNDED_TIMEOUT });
     await expect(toast).toContainText(/Could not copy Report card/i);
     await expect(toast).toContainText(/Download/i);
-    await expect(toast).toHaveClass(/text-brand-rose/);
   });
 
   test("copying is instant: no hover-reveal and no popup (BAR §2.5)", async ({
     page,
   }) => {
     // The buttons are visible and enabled in the default state, not hidden
-    // behind a hover or a disclosure. (The toolbar's name carries its ⌘⇧C
-    // keycap, which is how it is told apart from the pane's own control.)
-    const toolbarCopy = station(page).getByRole("button", {
-      name: "Copy report ⌘⇧C",
-    });
-    await expect(toolbarCopy).toBeVisible();
-    await expect(toolbarCopy).toBeEnabled();
-    await expect(
-      page.locator("#report-pane").getByRole("button", { name: "Copy report" })
-    ).toBeVisible();
+    // behind a hover or a disclosure.
+    const verdictCopy = page
+      .locator("#report-pane")
+      .getByRole("button", { name: "Copy verdict ⌘⇧C" });
+    await expect(verdictCopy).toBeVisible();
+    await expect(verdictCopy).toBeEnabled();
     for (const label of ["Copy card", "Copy one-liner", "Copy JSONL"]) {
       await expect(
         page.getByRole("button", { name: label, exact: true })

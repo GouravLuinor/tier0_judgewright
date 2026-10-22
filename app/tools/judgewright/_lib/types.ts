@@ -470,6 +470,19 @@ export interface WorkerOutputPayload {
   disagreementWindow: DisagreementWindow;
 }
 
+/**
+ * The worker's one unsolicited message: posted once its module has loaded and
+ * `onmessage` is wired. The hook arms no watchdog until it has seen this, so
+ * a slow chunk download or a cold JIT on a low-end device is never mistaken
+ * for a compute that blew its budget.
+ */
+export interface WorkerReadyMessage {
+  type: "ready";
+}
+
+/** Everything the worker can post back. */
+export type WorkerMessage = WorkerOutputPayload | WorkerReadyMessage;
+
 /** Result subset the hot path settles in one atomic `set()`. */
 export interface ComputationResult {
   ok: boolean;
