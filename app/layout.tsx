@@ -3,7 +3,7 @@ import { type ReactNode } from "react";
 import { Archivo, Fragment_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./tools/judgewright/_components/providers/ThemeProvider";
-import { SITE } from "@/lib/site";
+import { COMPANY, SITE } from "@/lib/site";
 
 const archivo = Archivo({
   subsets: ["latin"],
@@ -25,18 +25,19 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? SITE.url;
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: `${SITE.title} · ${SITE.name}`,
-    template: `%s · ${SITE.name}`,
+    default: SITE.seoTitle,
+    template: `%s · ${SITE.name} by ${COMPANY.short}`,
   },
   description: SITE.description,
   keywords: [...SITE.keywords],
   applicationName: SITE.name,
-  authors: [{ name: "Nor AI", url: "https://norai.tech" }],
+  authors: [{ name: COMPANY.name, url: COMPANY.url }],
   creator: SITE.creator,
+  publisher: COMPANY.name,
   alternates: { canonical: "/tools/judgewright" },
   robots: { index: true, follow: true },
   openGraph: {
-    title: `${SITE.title} · ${SITE.name}`,
+    title: SITE.seoTitle,
     description: SITE.description,
     type: "website",
     url: "/tools/judgewright",
@@ -45,7 +46,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE.title} · ${SITE.name}`,
+    title: SITE.seoTitle,
     description: SITE.description,
   },
 };
@@ -79,7 +80,20 @@ const webApplicationJsonLd = {
     "ECE and Brier score from judge scores",
     "Markdown, one-line and JSONL exports with a reproducibility receipt",
   ],
-  creator: { "@type": "Organization", name: "Nor AI", url: "https://norai.tech" },
+  creator: { "@id": COMPANY.orgId },
+  publisher: { "@id": COMPANY.orgId },
+};
+
+// Same @id norai.tech declares, so crawlers join the tool to the company.
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": COMPANY.orgId,
+  name: COMPANY.name,
+  alternateName: COMPANY.short,
+  url: COMPANY.url,
+  logo: COMPANY.logo,
+  description: COMPANY.blurb,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -90,10 +104,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${archivo.variable} ${fragmentMono.variable}`}
     >
       <body className="min-h-screen bg-ground font-sans text-ink antialiased">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }} />
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

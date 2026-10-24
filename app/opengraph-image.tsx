@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { JudgewrightMark } from "./icon";
 
@@ -15,7 +17,8 @@ const SELECT = "#505ba6";
 const WEDGE = ["#343434", "#555555", "#6e6e6d", "#a0a0a0", "#c8c8c8", "#f3f3f2"];
 const WEDGE_WIDTH = [50, 10, 10, 10, 10, 10];
 
-export default function OpengraphImage() {
+export default async function OpengraphImage() {
+  const mark = `data:image/png;base64,${(await readFile(join(process.cwd(), "public/nor-ai-mark.png"))).toString("base64")}`;
   return new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", background: BEZEL, padding: 28 }}>
@@ -30,11 +33,15 @@ export default function OpengraphImage() {
             padding: "56px 64px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 18, width: "100%" }}>
             <div style={{ width: 56, height: 56, display: "flex" }}>
               <JudgewrightMark size={56} />
             </div>
             <div style={{ fontSize: 34, fontWeight: 700, color: INK }}>Judgewright</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: "auto", fontSize: 28, color: INK_2 }}>
+              <img src={mark} width={48} height={48} alt="" />
+              by Nor AI
+            </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

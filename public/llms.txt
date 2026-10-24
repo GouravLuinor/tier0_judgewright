@@ -1,6 +1,6 @@
 # Judgewright
 
-> Free, in-browser tool that checks whether an LLM-as-judge agrees with human labels once chance is removed. Paste JSONL or CSV rows with an example id, the judge's label and the human label; it returns a plain verdict, Cohen's kappa with a seeded bootstrap interval, Krippendorff's alpha, a confusion matrix and every disagreement. Nothing is uploaded and no account is needed. Built by Nor AI.
+> A free tool by Nor AI Technologies (https://norai.tech), an engineering studio in Ghazipur, India that builds custom AI, web and 3D software delivered into the customer's own infrastructure. Judgewright is a free, in-browser tool that checks whether an LLM-as-judge agrees with human labels once chance is removed. Paste JSONL or CSV rows with an example id, the judge's label and the human label; it returns a plain verdict, Cohen's kappa with a seeded bootstrap interval, Krippendorff's alpha, a confusion matrix and every disagreement. Nothing is uploaded and no account is needed.
 
 ## Use it
 
@@ -26,10 +26,18 @@
 - It keeps no history across runs.
 - Grade bands are the Landis–Koch convention, a convenience mapping rather than a standard.
 
+## About Nor AI
+
+- [Nor AI Technologies](https://norai.tech): custom AI, web and 3D software that runs in your own infrastructure; you keep the code
+- [About and mission](https://norai.tech/mission)
+- [Contact an engineer](https://norai.tech/contact)
+
 ## More free tools from Nor AI
 
 - [TokenCraft](https://tokens.norai.tech): token counter and LLM cost calculator
 - [SchemaCraft](https://schema.norai.tech): JSON to Zod, Pydantic and TypeScript types
 - [RegexCraft](https://regex.norai.tech): regex tester with plain-English explanations
+- [Grounded RAG](https://rag.norai.tech): cited answers from your own documents, privately
 - [Anchorflow](https://anchor.norai.tech): pin and audit GitHub Actions workflows
 - [Smart Rozgar](https://rozgar.norai.tech): Sarkari job alerts in Hindi and English
+- [All tools](https://norai.tech/products)

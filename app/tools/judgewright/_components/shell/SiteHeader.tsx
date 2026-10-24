@@ -3,7 +3,8 @@
 import { Command } from "lucide-react";
 import { useToolStore } from "../../_store/useToolStore";
 import { SignInButton } from "../auth/SignInButton";
-import { BrandMark } from "./BrandMark";
+import { COMPANY } from "@/lib/site";
+import { BrandMark, NorAiMark } from "./BrandMark";
 import { SamplesMenu } from "./SamplesMenu";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -20,7 +21,18 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-bezel-line bg-bezel text-bezel-ink">
-      <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 w-full max-w-[1400px] items-center gap-2.5 px-4 sm:gap-3 sm:px-6 lg:px-8">
+        <a
+          href={COMPANY.url}
+          aria-label="Nor AI, the company behind Judgewright"
+          className="flex shrink-0 items-center gap-2 rounded-[3px] text-sm font-semibold text-bezel-ink hover:text-bezel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select focus-visible:ring-offset-2 focus-visible:ring-offset-bezel"
+        >
+          <NorAiMark size={24} />
+          <span>Nor AI</span>
+        </a>
+        <span aria-hidden="true" className="text-bezel-line">
+          /
+        </span>
         <a
           href="/tools/judgewright"
           aria-label="Judgewright, home"
@@ -56,6 +68,12 @@ export function SiteHeader() {
           >
             <Command className="h-4 w-4" aria-hidden="true" />
           </button>
+          <a
+            href={COMPANY.toolsUrl}
+            className="hidden rounded-[3px] px-2.5 py-1.5 text-sm text-bezel-muted transition-colors duration-150 hover:bg-bezel-raised hover:text-bezel-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select xl:inline-flex"
+          >
+            More Nor AI tools
+          </a>
           <ThemeToggle />
           <SignInButton />
         </div>
