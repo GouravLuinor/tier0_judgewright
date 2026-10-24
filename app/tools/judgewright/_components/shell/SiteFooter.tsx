@@ -1,5 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
-import { FAMILY_TOOLS, NORAI_URL, SITE } from "@/lib/site";
+import { COMPANY, FAMILY_TOOLS, SITE } from "@/lib/site";
 import { BrandMark, NorAiMark } from "./BrandMark";
 
 const HERE = [
@@ -28,12 +28,18 @@ export function SiteFooter() {
               browser; nothing is uploaded.
             </p>
             <a
-              href={NORAI_URL}
-              className="mt-6 inline-flex items-center gap-2 rounded-[3px] text-sm text-bezel-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select focus-visible:ring-offset-2 focus-visible:ring-offset-bezel"
+              href={COMPANY.url}
+              className="mt-6 inline-flex items-center gap-2 rounded-[3px] text-sm font-medium text-bezel-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select focus-visible:ring-offset-2 focus-visible:ring-offset-bezel"
             >
-              <NorAiMark />
-              Built by Nor AI
+              <NorAiMark size={22} />
+              Judgewright by Nor AI
             </a>
+            <p className="mt-2 max-w-xs text-sm leading-relaxed text-bezel-muted">{COMPANY.blurb}</p>
+            <p className="mt-3 text-sm">
+              <a href={COMPANY.contactUrl} className="font-medium text-bezel-ink underline hover:text-bezel-muted">
+                Talk to an engineer
+              </a>
+            </p>
           </div>
 
           <nav aria-labelledby="footer-here">
@@ -72,11 +78,20 @@ export function SiteFooter() {
                 </li>
               ))}
             </ul>
+            <a href={COMPANY.toolsUrl} className="mt-4 inline-block text-sm font-medium text-bezel-ink underline hover:text-bezel-muted">
+              See all Nor AI tools
+            </a>
           </nav>
         </div>
 
         <div className="mt-14 flex flex-col gap-2 border-t border-bezel-line pt-5 text-xs text-bezel-muted sm:flex-row sm:justify-between">
-          <p className="figures">© {year} Nor AI</p>
+          <p className="figures">
+            © {year}{" "}
+            <a href={COMPANY.url} className="hover:text-bezel-ink">
+              {COMPANY.name}
+            </a>{" "}
+            · {COMPANY.place}
+          </p>
           <p>
             MIT licensed. Statistics are computed in a Web Worker in your tab;
             sign-in is optional.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { COMPANY } from "@/lib/site";
 
 /** On-brand 404 — never a bare Next.js error page. */
 export default function NotFound() {
@@ -18,6 +19,9 @@ export default function NotFound() {
       >
         Go to the workstation
       </Link>
+      <a href={COMPANY.url} className="mt-4 w-fit text-sm text-ink-3 underline hover:text-ink">
+        Judgewright is a free tool by Nor AI
+      </a>
     </div>
   );
 }

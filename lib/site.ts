@@ -4,11 +4,13 @@ export const SITE = {
   name: "Judgewright",
   shortName: "Judgewright",
   title: "LLM Judge Calibration: Cohen's Kappa vs Human Labels",
+  /** Search-result title: under 60 characters so it is not truncated. */
+  seoTitle: "LLM Judge Calibration, Cohen's κ · Judgewright by Nor AI",
   description:
     "Check whether your LLM-as-judge agrees with human labels once chance is removed. Paste JSONL or CSV verdicts and get Cohen's κ, Krippendorff's α, bootstrap confidence intervals, a confusion matrix and every disagreement. Free, no sign-up, computed in your browser.",
   url: "https://judge.norai.tech",
   locale: "en_US",
-  creator: "Nor AI",
+  creator: "Nor AI Technologies",
   keywords: [
     "LLM judge calibration",
     "LLM as a judge",
@@ -54,17 +56,30 @@ export const SITE = {
   ],
 } as const;
 
+/** The company behind the tool. `orgId` matches the @id norai.tech declares, so crawlers join the two sites. */
+export const COMPANY = {
+  name: "Nor AI Technologies",
+  short: "Nor AI",
+  url: "https://norai.tech",
+  orgId: "https://norai.tech/#organization",
+  logo: `${SITE.url}/nor-ai-mark.png`,
+  contactUrl: "https://norai.tech/contact",
+  aboutUrl: "https://norai.tech/mission",
+  toolsUrl: "https://norai.tech/products",
+  blurb: "Custom AI, web and 3D software delivered into your own infrastructure. You keep the code.",
+  place: "Ghazipur, Uttar Pradesh, India",
+} as const;
+
 /**
- * The Nor AI family thread: the same list, in the same order, on every tool.
- * Each tool renders it in its own world and leaves itself out.
+ * The Nor AI family thread: the same names and one-liners, in the same order,
+ * on every tool. Each tool renders it in its own world and leaves itself out.
  */
 export const FAMILY_TOOLS = [
   { name: "TokenCraft", blurb: "Token counter and LLM cost calculator", href: "https://tokens.norai.tech" },
   { name: "SchemaCraft", blurb: "JSON to Zod, Pydantic and TypeScript types", href: "https://schema.norai.tech" },
   { name: "RegexCraft", blurb: "Regex tester with plain-English explanations", href: "https://regex.norai.tech" },
+  { name: "Grounded RAG", blurb: "Cited answers from your own documents, privately", href: "https://rag.norai.tech" },
   { name: "Judgewright", blurb: "Calibrate your LLM judge against human labels", href: "https://judge.norai.tech" },
   { name: "Anchorflow", blurb: "Pin and audit GitHub Actions workflows", href: "https://anchor.norai.tech" },
   { name: "Smart Rozgar", blurb: "Sarkari job alerts in Hindi and English", href: "https://rozgar.norai.tech" },
 ] as const;
-
-export const NORAI_URL = "https://norai.tech";

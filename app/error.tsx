@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { TriangleAlert } from "lucide-react";
+import { COMPANY } from "@/lib/site";
 import { MAX_PERSISTED_TEXT_CHARS } from "./tools/judgewright/_lib/constants";
 
 /**
@@ -42,6 +43,9 @@ export default function Error({
       >
         Try again
       </button>
+      <a href={COMPANY.url} className="mt-4 w-fit text-sm text-ink-3 underline hover:text-ink">
+        Judgewright is a free tool by Nor AI
+      </a>
     </div>
   );
 }

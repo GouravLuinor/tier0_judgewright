@@ -18,7 +18,10 @@ import { ShareSection } from "./_components/report/ShareSection";
 import { CompareSection } from "./_components/landing/CompareSection";
 import { MethodSection } from "./_components/landing/MethodSection";
 import { FaqSection } from "./_components/landing/FaqSection";
+import { BuiltBySection } from "./_components/landing/BuiltBySection";
 import { useToolStore } from "./_store/useToolStore";
+import { COMPANY } from "@/lib/site";
+import { NorAiMark } from "./_components/shell/BrandMark";
 
 const PROMISES = ["Computed in your browser", "Nothing is uploaded", "No account needed"];
 
@@ -44,6 +47,13 @@ export default function ToolPage() {
         <div className="mx-auto w-full max-w-[1400px] px-4 pb-16 pt-8 sm:px-6 sm:pt-10 lg:px-8">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
             <div className="max-w-3xl">
+              <a
+                href={COMPANY.url}
+                className="mb-3 inline-flex items-center gap-2 rounded-[3px] text-sm text-ink-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-select"
+              >
+                <NorAiMark size={20} />
+                A free tool by <span className="font-medium text-ink">Nor AI</span>
+              </a>
               <h1 className="text-[1.75rem] font-semibold leading-[1.1] tracking-[-0.015em] [font-stretch:85%] sm:text-4xl lg:text-[2.75rem]">
                 Calibrate your LLM judge against human labels
               </h1>
@@ -110,6 +120,7 @@ export default function ToolPage() {
         <CompareSection />
         <MethodSection />
         <FaqSection />
+        <BuiltBySection />
       </main>
 
       <SiteFooter />

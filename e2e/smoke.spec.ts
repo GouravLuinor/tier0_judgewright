@@ -354,6 +354,20 @@ test.describe("Judgewright shell journeys", () => {
     await expect(page.locator("#guide")).toBeVisible();
     await expect(page.locator("#faq")).toBeVisible();
   });
+
+  test("Nor AI is visible: header lockup, hero line, built-by section, footer links", async ({ page }) => {
+    await expect(page.getByRole("banner").getByRole("link", { name: /Nor AI, the company behind Judgewright/i })).toHaveAttribute("href", "https://norai.tech");
+    await expect(page.getByText(/A free tool by/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Built by Nor AI/i })).toBeVisible();
+    const footer = page.getByRole("contentinfo");
+    await expect(footer.getByRole("link", { name: /Grounded RAG/ })).toHaveAttribute("href", "https://rag.norai.tech");
+    await expect(footer.getByRole("link", { name: /^Judgewright\b(?! by)/ })).toHaveCount(0);
+    const jsonLd = (await page.locator('script[type="application/ld+json"]').allInnerTexts()).map(
+      (text) => JSON.parse(text) as Record<string, unknown>
+    );
+    expect(jsonLd.map((e) => e["@type"])).toEqual(["Organization", "WebApplication", "FAQPage"]);
+    expect(jsonLd[0]["@id"]).toBe("https://norai.tech/#organization");
+  });
 });
 
 

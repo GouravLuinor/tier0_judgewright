@@ -56,6 +56,11 @@ export default function GlobalError({
           >
             Reload
           </button>
+          <p style={{ marginTop: "1.5rem" }}>
+            <a href="https://norai.tech" style={{ color: "#a1a697" }}>
+              Judgewright is a free tool by Nor AI
+            </a>
+          </p>
         </div>
       </body>
     </html>

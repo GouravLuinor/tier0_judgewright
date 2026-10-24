@@ -19,17 +19,17 @@ export function BrandMark({ className }: { className?: string }) {
   );
 }
 
-/** The Nor AI family mark: the shared "N" chip, drawn in this tool's palette. */
-export function NorAiMark({ className }: { className?: string }) {
+/** The Nor AI logo, served from /public (no network egress). Sits on a light chip so it reads on the bezel. */
+export function NorAiMark({ className, size = 20 }: { className?: string; size?: number }) {
   return (
-    <span
+    // eslint-disable-next-line @next/next/no-img-element -- 160px static asset, fixed size
+    <img
+      src="/nor-ai-mark.png"
+      alt=""
+      width={size}
+      height={size}
       aria-hidden="true"
-      className={cn(
-        "grid h-5 w-5 shrink-0 place-items-center rounded-[2px] bg-bezel-ink text-[11px] font-bold leading-none text-bezel",
-        className
-      )}
-    >
-      N
-    </span>
+      className={cn("shrink-0 rounded-full bg-bezel-ink", className)}
+    />
   );
 }
