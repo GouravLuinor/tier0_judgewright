@@ -379,13 +379,13 @@ pm2 save
 # nginx proxies judge.norai.tech → 127.0.0.1:3005; certbot issues the certificate
 ```
 
-**Docker / Caddy (parallel path)**
+**Deploy (from your laptop)**
 
 ```bash
-docker compose build --pull && docker compose up -d --remove-orphans
-# Caddyfile: judge.norai.tech → reverse_proxy judge-norai:3005 (auto-TLS)
-./deploy.sh confirm            # SHA-gated: refuses without DEPLOY_CONFIRM=1
+DEPLOY_CONFIRM=1 ./deploy.sh   # backup → rsync → build as deploy → pm2 restart → verify
 ```
+
+See `../DEPLOYMENT_PLAYBOOK.md` for the server layout and the one-time setup.
 
 `.env.example` is the authoritative environment source: a single
 `NEXT_PUBLIC_SITE_URL=https://judge.norai.tech`, plus Supabase keys that are **empty by

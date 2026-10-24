@@ -168,11 +168,8 @@ Plus `node --experimental-strip-types` entries run by `npm run repro:seed` and
 
 | File | Role |
 |---|---|
-| `Dockerfile` | 3-stage build, non-root runner, port 3005 healthcheck |
-| `docker-compose.yml` | `127.0.0.1:3005:3005`, resource limits, log rotation |
-| `Caddyfile` | `judge.norai.tech` → `judge-norai:3005` with auto-TLS |
-| `ecosystem.config.cjs` | PM2 `judge-norai`, `127.0.0.1:3005`, memory ceiling |
-| `deploy.sh` | SHA-gated Docker/Caddy path: refuses without `DEPLOY_CONFIRM=1` |
+| `ecosystem.config.cjs` | PM2 `judge-norai` (next binary), `127.0.0.1:3005`, memory ceiling |
+| `deploy.sh` | Laptop-side deploy per the playbook: backup, rsync, build as `deploy`, pm2 restart; refuses without `DEPLOY_CONFIRM=1` |
 | `scripts/serve-standalone.sh` | Boots the real standalone artifact for Playwright (`exec`s the server so no orphan holds 3005) |
 | `scripts/bench.ts` | `npm run bench` — the reproducible pure-core benchmark |
 | `.github/workflows/ci.yml` | typecheck → lint → unit → build → Playwright |

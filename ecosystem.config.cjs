@@ -11,8 +11,10 @@ module.exports = {
     {
       name: "judge-norai",
       cwd: "/var/www/judge",
-      script: "npm",
-      args: "start -- -p 3005",
+      // The next binary directly, not `npm start` (DEPLOYMENT_PLAYBOOK.md §4).
+      script: "node_modules/next/dist/bin/next",
+      interpreter: "node",
+      args: "start -p 3005",
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
