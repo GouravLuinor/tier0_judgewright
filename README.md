@@ -1,5 +1,7 @@
 # Judgewright
 
+> 🔗 **Live:** [judge.norai.tech](https://judge.norai.tech) · One of the free developer tools from [Nor AI Technologies](https://norai.tech) · Built by [Gourav Kumar Singh](https://github.com/GouravLuinor)
+
 > **Calibration instrument for the LLM judge you already ship.** Paste a set of
 > verdicts as JSONL or CSV; Judgewright returns a report card with error bars — chance-corrected
 > agreement, Krippendorff's α, seeded reproducible bootstrap CIs, ECE/Brier, a letter grade — all
@@ -368,7 +370,6 @@ responsive contract — no horizontal overflow at 390 and 1440, single-column st
 
 The production truth is **PM2 + nginx + certbot** (`context.md` §5); Docker + Caddy ship as
 the parallel ops artifacts. Both are first class — do not delete one for the other.
-The exact, human-gated runbook is [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
 **PM2 (documented production path)**
 

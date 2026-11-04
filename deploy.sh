@@ -5,8 +5,8 @@
 # Needs DEPLOY_CONFIRM=1 (or the `confirm` argument), so it never runs by accident.
 set -euo pipefail
 
-VPS="root@YOUR_SERVER_IP"
-KEY="${DEPLOY_KEY:-${HOME}/.ssh/norai_personal_admin}"
+VPS="${DEPLOY_TARGET:?Set DEPLOY_TARGET, e.g. deploy@your-server}"
+KEY="${DEPLOY_KEY:-${HOME}/.ssh/id_ed25519}"
 TARGET_DIR="/var/www/judge"
 PM2_NAME="judge-norai"
 PORT=3005

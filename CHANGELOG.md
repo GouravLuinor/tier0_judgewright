@@ -104,7 +104,7 @@ followed it, and the gaps that are disclosed rather than papered over.
   output. `QUALITY_REPORT.md` rewritten with real gate records, the independent
   cross-verifications and an honest known-gaps list. `ARCHITECTURE.md` reconciled to the
   shipped tree, signatures, budgets and failure-mode copy. `RELEASE_CHECKLIST.md` rewritten
-  with the `deploy@YOUR_SERVER_IP` flow, the exact nginx block, `certbot --nginx` and the
+  with the `deploy@<server>` flow, the exact nginx block, `certbot --nginx` and the
   PM2 `judge-norai` commands, with every irreversible step marked **AWAITING HUMAN
   APPROVAL**.
 
