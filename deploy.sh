@@ -5,7 +5,10 @@
 # Needs DEPLOY_CONFIRM=1 (or the `confirm` argument), so it never runs by accident.
 set -euo pipefail
 
-VPS="${DEPLOY_TARGET:?Set DEPLOY_TARGET, e.g. deploy@your-server}"
+# Server details live in an untracked .deploy.env (DEPLOY_TARGET, DEPLOY_KEY).
+[ -f .deploy.env ] && . ./.deploy.env
+
+VPS="${DEPLOY_TARGET:?Set DEPLOY_TARGET (e.g. in .deploy.env), e.g. deploy@your-server}"
 KEY="${DEPLOY_KEY:-${HOME}/.ssh/id_ed25519}"
 TARGET_DIR="/var/www/judge"
 PM2_NAME="judge-norai"
@@ -25,7 +28,7 @@ ssh_vps "mkdir -p /root/deploy-backups && tar --exclude=node_modules --exclude=.
 
 echo "=== 2. Sync code (the server's .env.local is never touched) ==="
 rsync -az --delete --chown=deploy:deploy \
-  --exclude='node_modules' --exclude='.next' --exclude='.git' --exclude='.env.local' \
+  --exclude='node_modules' --exclude='.next' --exclude='.git' --exclude='.env.local' --exclude='.deploy.env' \
   --exclude='.impeccable' --exclude='test-results' --exclude='coverage' \
   -e "ssh -i ${KEY} -o IdentitiesOnly=yes" \
   ./ "${VPS}:${TARGET_DIR}/"

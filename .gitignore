@@ -14,3 +14,6 @@ playwright-report/
 
 # local env (real secrets never commit)
 .env.local
+
+# Local deploy target (server address, SSH key path)
+.deploy.env
